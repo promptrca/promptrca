@@ -1,303 +1,238 @@
 #!/usr/bin/env python3
 """
-Example: Using Sherlock with Memory System
+Sherlock Core - RAG Memory System Example
+Copyright (C) 2025 Christian Gennaro Faraone
 
-This example demonstrates how to configure and use Sherlock with an external
-memory system for improved root cause analysis through RAG.
+Example demonstrating the graph-based RAG memory system.
 """
 
 import asyncio
 import os
 import sys
-sys.path.append('src')
-from sherlock.memory import MemoryClient
+from datetime import datetime, timezone
+
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from sherlock.memory import (
+    MemoryClient, GraphNode, GraphEdge, ObservabilityPointer, 
+    ConfigSnapshot, Pattern, Incident, GraphBuilder
+)
+from sherlock.utils.config import get_memory_config
 
 
-async def create_sample_data(client):
-    """Create sample investigation data in OpenSearch."""
-    print("Creating sample investigation data...")
+async def main():
+    """Main example function demonstrating RAG system."""
+    print("🧠 Sherlock RAG Memory System Example")
+    print("=" * 50)
     
-    # Create index first
-    await client.create_index()
+    # Get configurations
+    memory_config = get_memory_config()
     
-    # Sample investigation data
-    sample_investigations = [
-        {
-            "investigation_id": "inv-001",
-            "resource_type": "lambda",
-            "resource_name": "payment-processor",
-            "error_type": "timeout",
-            "error_message": "Lambda function timeout after 3 seconds",
-            "root_cause_summary": "DynamoDB connection pool exhaustion due to high concurrent requests",
-            "advice_summary": "Increase DynamoDB connection pool size from 10 to 50 connections",
-            "outcome": "resolved",
-            "quality_score": 0.92,
-            "created_at": "2025-01-13T14:30:00Z",
-            "facts": "Lambda timeout, DynamoDB connection pool full, high concurrent load",
-            "hypotheses": "Connection pool exhaustion, cold start issues, insufficient memory",
-            "advice": "Scale connection pool, enable provisioned concurrency, increase memory"
-        },
-        {
-            "investigation_id": "inv-002",
-            "resource_type": "lambda",
-            "resource_name": "payment-processor",
-            "error_type": "timeout",
-            "error_message": "Lambda function timeout after 3 seconds",
-            "root_cause_summary": "Cold start latency causing timeout on first invocation",
-            "advice_summary": "Enable provisioned concurrency for consistent performance",
-            "outcome": "resolved",
-            "quality_score": 0.88,
-            "created_at": "2025-01-12T09:15:00Z",
-            "facts": "Lambda timeout, cold start, first invocation failure",
-            "hypotheses": "Cold start latency, insufficient provisioned concurrency",
-            "advice": "Enable provisioned concurrency, optimize package size"
-        },
-        {
-            "investigation_id": "inv-003",
-            "resource_type": "dynamodb",
-            "resource_name": "user-sessions",
-            "error_type": "throttling",
-            "error_message": "DynamoDB throttling exceptions on write operations",
-            "root_cause_summary": "Hot partition causing throttling on user-sessions table",
-            "advice_summary": "Implement write sharding to distribute load across partitions",
-            "outcome": "resolved",
-            "quality_score": 0.95,
-            "created_at": "2025-01-11T16:45:00Z",
-            "facts": "DynamoDB throttling, hot partition, write operations failing",
-            "hypotheses": "Hot partition, insufficient capacity, uneven key distribution",
-            "advice": "Implement write sharding, increase capacity, optimize key design"
-        }
-    ]
+    print(f"Memory enabled: {memory_config['enabled']}")
+    print(f"Memory endpoint: {memory_config['endpoint']}")
     
-    # Index sample data
-    import httpx
-    async with httpx.AsyncClient() as http_client:
-        for inv in sample_investigations:
-            try:
-                response = await http_client.post(
-                    f"{client.endpoint}/investigations/_doc/{inv['investigation_id']}",
-                    json=inv,
-                    headers=client._auth_headers(),
-                    timeout=5.0
-                )
-                response.raise_for_status()
-                print(f"  ✓ Indexed investigation {inv['investigation_id']}")
-            except Exception as e:
-                print(f"  ✗ Failed to index {inv['investigation_id']}: {e}")
+    if not memory_config['enabled']:
+        print("❌ Memory system is disabled. Set SHERLOCK_MEMORY_ENABLED=true to enable.")
+        return
     
-    print("Sample data creation complete!\n")
-
-
-async def example_memory_query():
-    """Example of querying the memory system."""
-    
-    # Configure memory client for local OpenSearch
-    client = MemoryClient({
-        "enabled": True,
-        "endpoint": os.getenv("SHERLOCK_MEMORY_ENDPOINT", "http://localhost:9200"),
-        "auth_type": "api_key",
-        "api_key": "",  # No auth needed for local OpenSearch
-        "max_results": 5,
-        "min_quality": 0.7,
-        "timeout_ms": 2000
-    })
-    
-    print("Memory Client Configuration:")
-    print(f"  Enabled: {client.enabled}")
-    print(f"  Endpoint: {client.endpoint}")
-    print()
+    # Initialize memory client with embedding support
+    memory_client = MemoryClient(memory_config)
     
     # Test connectivity
-    print("Testing OpenSearch connectivity...")
-    is_connected = await client.test_connectivity()
-    if is_connected:
-        print("✓ Connected to OpenSearch cluster")
-        
-        # Create sample data
-        await create_sample_data(client)
+    print("\n🔌 Testing OpenSearch connectivity...")
+    if await memory_client.test_connectivity():
+        print("✅ Connected to OpenSearch successfully")
     else:
-        print("✗ Failed to connect to OpenSearch cluster")
-        print("Make sure OpenSearch is running: docker-compose up -d opensearch")
+        print("❌ Failed to connect to OpenSearch")
         return
     
-    if not client.enabled:
-        print("⚠️  Memory system is not enabled. Set SHERLOCK_MEMORY_ENDPOINT to enable.")
+    # Create all indices
+    print("\n📝 Creating RAG indices...")
+    if await memory_client.create_all_indices():
+        print("✅ All indices created successfully")
+    else:
+        print("❌ Failed to create some indices")
         return
     
-    # Example query
-    print("Querying memory for similar Lambda timeout issues...")
-    print()
+    # Example: Build a knowledge graph
+    print("\n🏗️ Building knowledge graph...")
     
-    try:
-        similar_investigations = await client.find_similar(
-            query="Lambda function timeout after 3 seconds",
-            filters={
-                "resource_type": "lambda",
-                "resource_name": "payment-processor",
-                "min_quality_score": 0.7
-            },
-            limit=5
-        )
+    # Create sample nodes
+    lambda_node = GraphNode(
+        arn="arn:aws:lambda:eu-west-1:123456789012:function:my-function",
+        type="lambda",
+        name="my-function",
+        account_id="123456789012",
+        region="eu-west-1",
+        tags={"Environment": "prod", "Team": "backend"},
+        observability={
+            "log_group": "/aws/lambda/my-function",
+            "xray_name": "my-function",
+            "metric_namespace": "AWS/Lambda"
+        },
+        config_fingerprint={"hash": "abc123", "updated_at": datetime.now(timezone.utc).isoformat()},
+        staleness={"last_seen": datetime.now(timezone.utc).isoformat(), "flag": False}
+    )
+    
+    ddb_node = GraphNode(
+        arn="arn:aws:dynamodb:eu-west-1:123456789012:table/my-table",
+        type="dynamodb",
+        name="my-table",
+        account_id="123456789012",
+        region="eu-west-1",
+        tags={"Environment": "prod", "Team": "backend"},
+        observability={
+            "metric_namespace": "AWS/DynamoDB"
+        },
+        staleness={"last_seen": datetime.now(timezone.utc).isoformat(), "flag": False}
+    )
+    
+    # Create sample edge
+    lambda_ddb_edge = GraphEdge(
+        from_arn="arn:aws:lambda:eu-west-1:123456789012:function:my-function",
+        to_arn="arn:aws:dynamodb:eu-west-1:123456789012:table/my-table",
+        rel="READS",
+        evidence_sources=["X_RAY", "LOGS"],
+        confidence=0.85,
+        first_seen=datetime.now(timezone.utc).isoformat(),
+        last_seen=datetime.now(timezone.utc).isoformat(),
+        account_id="123456789012",
+        region="eu-west-1"
+    )
+    
+    # Create observability pointer
+    lambda_pointer = ObservabilityPointer(
+        arn="arn:aws:lambda:eu-west-1:123456789012:function:my-function",
+        logs="/aws/lambda/my-function",
+        traces={
+            "xray_name": "my-function",
+            "last_trace_ids": ["trace-123", "trace-456"]
+        },
+        metrics={
+            "namespace": "AWS/Lambda",
+            "names": ["Duration", "Errors", "Invocations"]
+        },
+        account_id="123456789012",
+        region="eu-west-1",
+        updated_at=datetime.now(timezone.utc).isoformat()
+    )
+    
+    # Store nodes and edges
+    print("Storing nodes and edges...")
+    await memory_client.upsert_node(lambda_node)
+    await memory_client.upsert_node(ddb_node)
+    await memory_client.upsert_edge(lambda_ddb_edge)
+    await memory_client.upsert_pointer(lambda_pointer)
+    
+    # Create sample incident
+    incident = Incident(
+        incident_id="INC-001",
+        nodes=["arn:aws:lambda:eu-west-1:123456789012:function:my-function"],
+        root_cause="Lambda function timeout due to DynamoDB throttling",
+        signals=["timeout", "throttling", "high latency"],
+        fix="Increase DynamoDB capacity and optimize Lambda function",
+        useful_queries="CloudWatch metrics, X-Ray traces, DynamoDB capacity",
+        pattern_ids=[],
+        created_at=datetime.now(timezone.utc).isoformat(),
+        account_id="123456789012",
+        region="eu-west-1"
+    )
+    
+    await memory_client.save_incident(incident)
+    
+    # Create sample pattern (no embeddings)
+    pattern = Pattern(
+        pattern_id="P-001",
+        title="Lambda-DynamoDB Timeout Pattern",
+        tags=["lambda", "dynamodb", "timeout", "throttling"],
+        signatures={
+            "topology_signature": "a3f5e8c2d1b4a7e9",  # Example hash
+            "resource_types": ["dynamodb", "lambda"],
+            "relationship_types": ["READS"],
+            "depth": 1,
+            "stack_signature": "lambda-dynamodb:READS",
+            "topology_motif": ["lambda->dynamodb(READS)"]
+        },
+        playbook_steps="1. Check DynamoDB capacity\n2. Review Lambda timeout settings\n3. Optimize queries\n4. Enable auto-scaling",
+        popularity=0.0,
+        last_used_at=datetime.now(timezone.utc).isoformat(),
+        match_count=0
+    )
+    
+    await memory_client.save_pattern(pattern)
+    print("✅ Pattern created and stored")
+    
+    # Example: RAG retrieval
+    print("\n🔍 Testing RAG retrieval...")
+    
+    # Retrieve context for the Lambda function
+    rag_result = await memory_client.retrieve_context("my-function", k_hop=2)
+    
+    if rag_result:
+        print(f"✅ Retrieved context for focus node: {rag_result.focus_node}")
+        print(f"   Subgraph nodes: {len(rag_result.subgraph['nodes'])}")
+        print(f"   Subgraph edges: {len(rag_result.subgraph['edges'])}")
+        print(f"   Patterns: {len(rag_result.patterns)}")
+        print(f"   Related incidents: {len(rag_result.related_incidents)}")
         
-        if similar_investigations:
-            print(f"✅ Found {len(similar_investigations)} similar investigations:\n")
-            
-            for i, investigation in enumerate(similar_investigations, 1):
-                outcome_icon = "✓" if investigation.outcome == "resolved" else "⚠" if investigation.outcome == "partial" else "✗"
-                
-                print(f"{i}. Investigation #{investigation.investigation_id}")
-                print(f"   Similarity: {investigation.similarity_score:.2f}")
-                print(f"   Resource: {investigation.resource_type}:{investigation.resource_name}")
-                print(f"   Root Cause: {investigation.root_cause_summary}")
-                print(f"   Solution: {investigation.advice_summary}")
-                print(f"   Outcome: {outcome_icon} {investigation.outcome.upper()} (quality: {investigation.quality_score:.2f})")
-                print(f"   Date: {investigation.created_at}")
-                print()
-        else:
-            print("ℹ️  No similar investigations found in memory.")
-            print("   This is normal for the first few investigations.")
-    
-    except Exception as e:
-        print(f"❌ Memory query failed: {e}")
-        print("   Investigations will continue without memory.")
-    
-    # Test another query
-    print("\n" + "="*50)
-    print("Testing DynamoDB throttling query...")
-    
-    try:
-        similar_investigations = await client.find_similar(
-            query="DynamoDB throttling exceptions",
-            filters={
-                "resource_type": "dynamodb",
-                "min_quality_score": 0.7
-            },
-            limit=3
-        )
+        # Show some details
+        if rag_result.subgraph['nodes']:
+            print("\n   Discovered resources:")
+            for node in rag_result.subgraph['nodes'][:3]:
+                print(f"   - {node.get('type', 'unknown')}: {node.get('name', 'unknown')}")
         
-        if similar_investigations:
-            print(f"✅ Found {len(similar_investigations)} similar investigations:\n")
-            
-            for i, investigation in enumerate(similar_investigations, 1):
-                outcome_icon = "✓" if investigation.outcome == "resolved" else "⚠" if investigation.outcome == "partial" else "✗"
-                
-                print(f"{i}. Investigation #{investigation.investigation_id}")
-                print(f"   Similarity: {investigation.similarity_score:.2f}")
-                print(f"   Resource: {investigation.resource_type}:{investigation.resource_name}")
-                print(f"   Root Cause: {investigation.root_cause_summary}")
-                print(f"   Solution: {investigation.advice_summary}")
-                print(f"   Outcome: {outcome_icon} {investigation.outcome.upper()} (quality: {investigation.quality_score:.2f})")
-                print(f"   Date: {investigation.created_at}")
-                print()
-        else:
-            print("ℹ️  No similar investigations found in memory.")
+        if rag_result.patterns:
+            print("\n   Matched patterns:")
+            for pattern in rag_result.patterns[:2]:
+                print(f"   - {pattern.get('title', 'Unknown')}")
+                print(f"     Tags: {', '.join(pattern.get('tags', []))}")
+        
+        if rag_result.related_incidents:
+            print("\n   Related incidents:")
+            for incident in rag_result.related_incidents[:2]:
+                print(f"   - {incident.get('incident_id', 'Unknown')}")
+                print(f"     Root cause: {incident.get('root_cause', '')[:100]}...")
+    else:
+        print("❌ No context retrieved")
     
-    except Exception as e:
-        print(f"❌ Memory query failed: {e}")
-        print("   Investigations will continue without memory.")
-
-
-async def example_investigation_with_memory():
-    """Example of running an investigation with memory enabled."""
+    # Example: Graph builder
+    print("\n🔧 Testing graph builder...")
     
-    print("="*60)
-    print("Example: Investigation with Memory System")
-    print("="*60)
-    print()
+    graph_builder = GraphBuilder(account_id="123456789012", region="eu-west-1")
     
-    # Set environment variables for memory system
-    os.environ["SHERLOCK_MEMORY_ENABLED"] = "true"
-    os.environ["SHERLOCK_MEMORY_ENDPOINT"] = "http://localhost:9200"
-    os.environ["SHERLOCK_MEMORY_API_KEY"] = ""
-    
-    print("Configuration:")
-    print(f"  SHERLOCK_MEMORY_ENABLED: {os.getenv('SHERLOCK_MEMORY_ENABLED')}")
-    print(f"  SHERLOCK_MEMORY_ENDPOINT: {os.getenv('SHERLOCK_MEMORY_ENDPOINT')}")
-    print()
-    
-    # Example investigation input
-    investigation_input = {
-        "free_text_input": "My Lambda function payment-processor is timing out after 3 seconds"
+    # Simulate X-Ray trace data
+    sample_trace = {
+        "Segments": [
+            {
+                "Document": {
+                    "name": "my-function",
+                    "origin": "AWS::Lambda::Function",
+                    "resource_arn": "arn:aws:lambda:eu-west-1:123456789012:function:my-function",
+                    "subsegments": [
+                        {
+                            "name": "DynamoDB",
+                            "resource_arn": "arn:aws:dynamodb:eu-west-1:123456789012:table/my-table",
+                            "start_time": datetime.now(timezone.utc).isoformat(),
+                            "end_time": datetime.now(timezone.utc).isoformat()
+                        }
+                    ]
+                }
+            }
+        ]
     }
     
-    print("Investigation Input:")
-    print(f"  {investigation_input['free_text_input']}")
-    print()
+    nodes, edges, pointers = graph_builder.extract_from_trace(sample_trace)
+    print(f"✅ Extracted {len(nodes)} nodes, {len(edges)} edges, {len(pointers)} pointers from trace")
     
-    print("Investigation Flow:")
-    print("  1. ✓ Parse investigation input")
-    print("  2. ⏳ Query memory system for similar cases...")
-    
-    # Query memory
-    await example_memory_query()
-    
-    print("  3. ✓ Inject memory context into prompt")
-    print("  4. ✓ Run multi-agent investigation")
-    print("  5. ✓ Generate investigation report")
-    print()
-    
-    print("Memory System Benefits:")
-    print("  • 30-40% improvement in root cause accuracy")
-    print("  • Faster resolution by learning from past cases")
-    print("  • Better advice prioritization")
-    print("  • Graceful degradation if memory unavailable")
-    print()
-
-
-async def example_without_memory():
-    """Example of running an investigation without memory."""
-    
-    print("="*60)
-    print("Example: Investigation without Memory System")
-    print("="*60)
-    print()
-    
-    # Disable memory system
-    os.environ["SHERLOCK_MEMORY_ENABLED"] = "false"
-    
-    print("Configuration:")
-    print(f"  SHERLOCK_MEMORY_ENABLED: {os.getenv('SHERLOCK_MEMORY_ENABLED')}")
-    print()
-    
-    print("Investigation Flow:")
-    print("  1. ✓ Parse investigation input")
-    print("  2. ⊘ Memory system disabled - skipping")
-    print("  3. ✓ Run multi-agent investigation")
-    print("  4. ✓ Generate investigation report")
-    print()
-    
-    print("Note: Investigations work normally without memory.")
-    print("Memory is an optional enhancement, not a requirement.")
-    print()
-
-
-def main():
-    """Run examples."""
-    print()
-    print("╔════════════════════════════════════════════════════════╗")
-    print("║  Sherlock Memory System Examples                      ║")
-    print("╚════════════════════════════════════════════════════════╝")
-    print()
-    
-    # Run examples
-    asyncio.run(example_investigation_with_memory())
-    asyncio.run(example_without_memory())
-    
-    print("="*60)
-    print("Examples Complete")
-    print("="*60)
-    print()
-    print("To use memory system in production:")
-    print("  1. Set SHERLOCK_MEMORY_ENABLED=true")
-    print("  2. Configure SHERLOCK_MEMORY_ENDPOINT")
-    print("  3. Set SHERLOCK_MEMORY_API_KEY")
-    print()
-    print("For more information, see:")
-    print("  • README.md - Configuration section")
-    print("  • MEMORY_SYSTEM.md - Implementation details")
-    print()
+    print("\n✅ RAG Memory System example completed successfully!")
+    print("\nThis example demonstrated:")
+    print("- Creating OpenSearch indices for graph storage")
+    print("- Storing nodes, edges, and observability pointers")
+    print("- Saving incidents and patterns with embeddings")
+    print("- RAG retrieval with k-hop subgraph traversal")
+    print("- Graph building from X-Ray traces")
 
 
 if __name__ == "__main__":
-    main()
-
+    asyncio.run(main())

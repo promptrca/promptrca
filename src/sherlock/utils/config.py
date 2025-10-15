@@ -122,6 +122,8 @@ def get_opensearch_config() -> Dict[str, Any]:
     }
 
 
+
+
 def get_environment_info() -> Dict[str, str]:
     """
     Get information about current environment configuration.

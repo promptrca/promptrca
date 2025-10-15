@@ -3,11 +3,18 @@
 Sherlock Core - Memory System
 Copyright (C) 2025 Christian Gennaro Faraone
 
-Memory system for querying external investigation storage.
-Provides read-only access to historical investigations for RAG enhancement.
+Graph-based RAG memory system for storing and retrieving past investigations.
 """
 
 from .client import MemoryClient
-from .models import MemoryResult
+from .models import (
+    MemoryResult, GraphNode, GraphEdge, ConfigSnapshot, 
+    ObservabilityPointer, Pattern, Incident, ChangeEvent, SubGraphResult
+)
+from .graph_builder import GraphBuilder
 
-__all__ = ["MemoryClient", "MemoryResult"]
+__all__ = [
+    'MemoryClient', 'MemoryResult', 'GraphNode', 'GraphEdge', 
+    'ConfigSnapshot', 'ObservabilityPointer', 'Pattern', 'Incident', 
+    'ChangeEvent', 'SubGraphResult', 'GraphBuilder'
+]

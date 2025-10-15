@@ -171,7 +171,7 @@ EXTRACT ONLY:
 
 DO NOT extract generic service names without specific identifiers.
 
-OUTPUT: JSON [{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}]
+OUTPUT: JSON [{{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}}]
 Return [] if no explicit resources found."""
 
         try:

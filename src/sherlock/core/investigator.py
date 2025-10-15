@@ -29,7 +29,7 @@ import json
 from ..models import InvestigationReport, InvestigationTarget, Fact, Hypothesis, Advice, SeverityAssessment, RootCauseAnalysis
 from ..clients import AWSClient
 from ..agents.lead_orchestrator import LeadOrchestratorAgent
-from ..utils.config import get_region
+from ..utils.config import get_region, get_memory_config
 
 
 class SherlockInvestigator:
