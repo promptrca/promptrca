@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_sns_topic_config(topic_arn: str, region: str = "eu-west-1") -> str:
+def get_sns_topic_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get SNS topic configuration and attributes.
     
     Args:
         topic_arn: The SNS topic ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic configuration
@@ -68,14 +70,15 @@ def get_sns_topic_config(topic_arn: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_sns_topic_metrics(topic_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_sns_topic_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for an SNS topic.
     
     Args:
         topic_name: The SNS topic name (without ARN)
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic metrics
@@ -132,13 +135,14 @@ def get_sns_topic_metrics(topic_name: str, hours_back: int = 24, region: str = "
 
 
 @tool
-def get_sns_subscriptions(topic_arn: str, region: str = "eu-west-1") -> str:
+def get_sns_subscriptions(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get SNS topic subscriptions.
     
     Args:
         topic_arn: The SNS topic ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with subscription details
@@ -172,12 +176,13 @@ def get_sns_subscriptions(topic_arn: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def list_sns_topics(region: str = "eu-west-1") -> str:
+def list_sns_topics(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List SNS topics in the region.
     
     Args:
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic list

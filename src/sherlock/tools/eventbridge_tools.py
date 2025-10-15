@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_eventbridge_rule_config(rule_name: str, region: str = "eu-west-1") -> str:
+def get_eventbridge_rule_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get EventBridge rule configuration.
     
     Args:
         rule_name: The EventBridge rule name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule configuration
@@ -64,13 +66,14 @@ def get_eventbridge_rule_config(rule_name: str, region: str = "eu-west-1") -> st
 
 
 @tool
-def get_eventbridge_targets(rule_name: str, region: str = "eu-west-1") -> str:
+def get_eventbridge_targets(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get EventBridge rule targets.
     
     Args:
         rule_name: The EventBridge rule name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with target details
@@ -115,14 +118,15 @@ def get_eventbridge_targets(rule_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_eventbridge_metrics(rule_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_eventbridge_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for an EventBridge rule.
     
     Args:
         rule_name: The EventBridge rule name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule metrics
@@ -178,12 +182,13 @@ def get_eventbridge_metrics(rule_name: str, hours_back: int = 24, region: str = 
 
 
 @tool
-def list_eventbridge_rules(region: str = "eu-west-1") -> str:
+def list_eventbridge_rules(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List EventBridge rules in the region.
     
     Args:
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule list
@@ -218,13 +223,14 @@ def list_eventbridge_rules(region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_eventbridge_bus_config(event_bus_name: str = "default", region: str = "eu-west-1") -> str:
+def get_eventbridge_bus_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get EventBridge event bus configuration.
     
     Args:
         event_bus_name: The EventBridge event bus name (default: "default")
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with event bus configuration

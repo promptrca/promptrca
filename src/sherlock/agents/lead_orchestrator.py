@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from strands import Agent, tool
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
+from ..utils.config import get_region
 from ..agents.input_parser_agent import ParsedInputs, ParsedResource
 from ..agents.specialized.lambda_agent import create_lambda_agent, create_lambda_agent_tool
 from ..agents.specialized.apigateway_agent import create_apigateway_agent, create_apigateway_agent_tool
@@ -69,9 +70,10 @@ class InvestigationContext:
 class LeadOrchestratorAgent:
     """Lead Orchestrator Agent that coordinates specialist agents for AWS incident investigation."""
     
-    def __init__(self, model):
+    def __init__(self, model, region: str = None):
         """Initialize the lead orchestrator agent."""
         self.model = model
+        self.region = region or get_region()
         
         # Create specialized agents
         self.lambda_agent = create_lambda_agent(model)
@@ -104,7 +106,7 @@ class LeadOrchestratorAgent:
         # Initialize root cause agent for synthesis
         from .root_cause_agent import RootCauseAgent
         from ..clients.aws_client import AWSClient
-        aws_client = AWSClient(region="eu-west-1")  # TODO: make region configurable
+        aws_client = AWSClient(region=self.region)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=model)
         
         # Create the lead orchestrator agent with all specialist tools
@@ -191,8 +193,9 @@ Provide a comprehensive analysis including:
             ]
         )
     
-    async def investigate(self, inputs: Dict[str, Any], region: str = "eu-west-1") -> InvestigationReport:
+    async def investigate(self, inputs: Dict[str, Any], region: str = None) -> InvestigationReport:
         """Run multi-agent investigation using the lead orchestrator."""
+        region = region or get_region()
         logger.info("🔍 Starting multi-agent investigation...")
 
         # Generate investigation ID

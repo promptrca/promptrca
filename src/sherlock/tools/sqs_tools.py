@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_sqs_queue_config(queue_url: str, region: str = "eu-west-1") -> str:
+def get_sqs_queue_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get SQS queue configuration and attributes.
     
     Args:
         queue_url: The SQS queue URL
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue configuration
@@ -71,14 +73,15 @@ def get_sqs_queue_config(queue_url: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_sqs_queue_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for an SQS queue.
     
     Args:
         queue_name: The SQS queue name (without URL)
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue metrics
@@ -135,13 +138,14 @@ def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24, region: str = "
 
 
 @tool
-def get_sqs_dead_letter_queue(queue_url: str, region: str = "eu-west-1") -> str:
+def get_sqs_dead_letter_queue(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get SQS dead letter queue configuration.
     
     Args:
         queue_url: The SQS queue URL
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with DLQ configuration
@@ -211,13 +215,14 @@ def get_sqs_dead_letter_queue(queue_url: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def list_sqs_queues(prefix: str = "", region: str = "eu-west-1") -> str:
+def list_sqs_queues(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List SQS queues in the region.
     
     Args:
         prefix: Optional prefix to filter queue names
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue list

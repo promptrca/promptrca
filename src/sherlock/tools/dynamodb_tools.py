@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_dynamodb_table_config(table_name: str, region: str = "eu-west-1") -> str:
+def get_dynamodb_table_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get DynamoDB table configuration and status.
     
     Args:
         table_name: The DynamoDB table name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with table configuration
@@ -69,14 +71,15 @@ def get_dynamodb_table_config(table_name: str, region: str = "eu-west-1") -> str
 
 
 @tool
-def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_dynamodb_table_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for a DynamoDB table.
     
     Args:
         table_name: The DynamoDB table name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with table metrics
@@ -133,13 +136,14 @@ def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: st
 
 
 @tool
-def describe_dynamodb_streams(table_name: str, region: str = "eu-west-1") -> str:
+def describe_dynamodb_streams(describe: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get DynamoDB streams configuration for a table.
     
     Args:
         table_name: The DynamoDB table name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with streams configuration
@@ -190,12 +194,13 @@ def describe_dynamodb_streams(table_name: str, region: str = "eu-west-1") -> str
 
 
 @tool
-def list_dynamodb_tables(region: str = "eu-west-1") -> str:
+def list_dynamodb_tables(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List all DynamoDB tables in the region.
     
     Args:
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with table list

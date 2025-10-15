@@ -23,6 +23,7 @@ Contact: christiangenn99+sherlock@gmail.com
 from typing import Dict, Any, List, Optional
 from ..models import Fact
 from ..utils import get_logger
+from ..utils.config import get_region
 from .base_client import BaseAWSClient
 from .lambda_client import LambdaClient
 from .cloudwatch_client import CloudWatchClient
@@ -36,18 +37,18 @@ logger = get_logger(__name__)
 class AWSClient:
     """Unified AWS client that delegates to specialized service clients."""
 
-    def __init__(self, region: str = "eu-west-1"):
+    def __init__(self, region: str = None):
         """Initialize unified AWS client with specialized service clients."""
-        self.region = region
+        self.region = region or get_region()
         
         # Initialize specialized clients
-        self.lambda_client = LambdaClient(region)
-        self.cloudwatch_client = CloudWatchClient(region)
-        self.stepfunctions_client = StepFunctionsClient(region)
-        self.xray_client = XRayClient(region)
+        self.lambda_client = LambdaClient(self.region)
+        self.cloudwatch_client = CloudWatchClient(self.region)
+        self.stepfunctions_client = StepFunctionsClient(self.region)
+        self.xray_client = XRayClient(self.region)
         
         # Initialize log query client
-        self.log_query_client = LogQueryClient(region)
+        self.log_query_client = LogQueryClient(self.region)
         
         # Expose account info from base client
         self.account_id = self.lambda_client.account_id

@@ -94,6 +94,37 @@ For local testing with AWS credentials, you have several options:
 ### Production Deployment
 When deployed to AWS Lambda, credentials are automatically provided via the Lambda execution role. No environment variables needed.
 
+## Configuration
+
+Sherlock supports several environment variables for configuration:
+
+### Model Configuration
+- `SHERLOCK_MODEL_ID` - Bedrock model identifier (default: "openai.gpt-oss-120b-1:0")
+- `SHERLOCK_TEMPERATURE` - Model temperature 0.0-1.0 (default: 0.7)
+- `SHERLOCK_MAX_TOKENS` - Maximum tokens (optional)
+
+### Region Configuration
+- `AWS_REGION` - Primary AWS region setting
+- `AWS_DEFAULT_REGION` - Fallback AWS region setting
+
+Region detection follows this priority:
+1. `AWS_REGION` (highest priority)
+2. `AWS_DEFAULT_REGION` (fallback)
+3. `eu-west-1` (default)
+
+### Example Configuration
+```bash
+# Use a different model
+export SHERLOCK_MODEL_ID="anthropic.claude-3-sonnet-20240229-v1:0"
+export SHERLOCK_TEMPERATURE="0.3"
+
+# Set region
+export AWS_REGION="us-east-1"
+
+# Run with custom configuration
+make run-with-aws
+```
+
 ## Expected Response
 
 ### Without AWS Credentials

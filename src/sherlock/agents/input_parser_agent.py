@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from ..models import Fact
 from ..utils import get_logger
 from strands import Agent
-from strands.models import BedrockModel
+from ..utils.config import create_bedrock_model
 
 logger = get_logger(__name__)
 
@@ -75,11 +75,7 @@ class InputParserAgent:
     def __init__(self):
         """Initialize the input parser agent."""
         # Initialize AI model for intelligent parsing
-        self.model = BedrockModel(
-            model_id="openai.gpt-oss-120b-1:0",
-            temperature=0.3,  # Lower temperature for more consistent extraction
-            streaming=False
-        )
+        self.model = create_bedrock_model()
         
         # X-Ray trace ID pattern (reliable regex)
         self.trace_id_pattern = r'1-[a-f0-9]{8}-[a-f0-9]{24}'

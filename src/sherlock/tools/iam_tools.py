@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_iam_role_config(role_name: str, region: str = "eu-west-1") -> str:
+def get_iam_role_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get IAM role configuration including trust policy and attached policies.
     
     Args:
         role_name: The IAM role name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with role configuration
@@ -84,13 +86,14 @@ def get_iam_role_config(role_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_iam_policy_document(policy_arn: str, region: str = "eu-west-1") -> str:
+def get_iam_policy_document(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get IAM policy document details.
     
     Args:
         policy_arn: The IAM policy ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with policy document details
@@ -129,7 +132,8 @@ def get_iam_policy_document(policy_arn: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def simulate_iam_policy(policy_document: str, action: str, resource: str = "*", region: str = "eu-west-1") -> str:
+def simulate_iam_policy(simulate: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Simulate IAM policy to check if an action is allowed.
     
@@ -137,7 +141,7 @@ def simulate_iam_policy(policy_document: str, action: str, resource: str = "*", 
         policy_document: The IAM policy document (JSON string)
         action: The action to test (e.g., "lambda:InvokeFunction")
         resource: The resource ARN to test (default: "*")
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with simulation results
@@ -185,13 +189,14 @@ def simulate_iam_policy(policy_document: str, action: str, resource: str = "*", 
 
 
 @tool
-def get_iam_user_policies(user_name: str, region: str = "eu-west-1") -> str:
+def get_iam_user_policies(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get IAM user policies and permissions.
     
     Args:
         user_name: The IAM user name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with user policies

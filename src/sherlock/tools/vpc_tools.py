@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_vpc_config(vpc_id: str, region: str = "eu-west-1") -> str:
+def get_vpc_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get VPC configuration and details.
     
     Args:
         vpc_id: The VPC ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with VPC configuration
@@ -63,13 +65,14 @@ def get_vpc_config(vpc_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_subnet_config(subnet_id: str, region: str = "eu-west-1") -> str:
+def get_subnet_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get subnet configuration and details.
     
     Args:
         subnet_id: The subnet ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with subnet configuration
@@ -105,13 +108,14 @@ def get_subnet_config(subnet_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_security_group_config(security_group_id: str, region: str = "eu-west-1") -> str:
+def get_security_group_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get security group configuration and rules.
     
     Args:
         security_group_id: The security group ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with security group configuration
@@ -141,13 +145,14 @@ def get_security_group_config(security_group_id: str, region: str = "eu-west-1")
 
 
 @tool
-def get_network_interface_config(network_interface_id: str, region: str = "eu-west-1") -> str:
+def get_network_interface_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get network interface (ENI) configuration.
     
     Args:
         network_interface_id: The network interface ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with network interface configuration
@@ -189,13 +194,14 @@ def get_network_interface_config(network_interface_id: str, region: str = "eu-we
 
 
 @tool
-def get_nat_gateway_config(nat_gateway_id: str, region: str = "eu-west-1") -> str:
+def get_nat_gateway_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get NAT Gateway configuration.
     
     Args:
         nat_gateway_id: The NAT Gateway ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with NAT Gateway configuration
@@ -225,13 +231,14 @@ def get_nat_gateway_config(nat_gateway_id: str, region: str = "eu-west-1") -> st
 
 
 @tool
-def get_internet_gateway_config(igw_id: str, region: str = "eu-west-1") -> str:
+def get_internet_gateway_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Internet Gateway configuration.
     
     Args:
         igw_id: The Internet Gateway ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Internet Gateway configuration

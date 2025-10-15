@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_xray_trace(trace_id: str, region: str = "eu-west-1") -> str:
+def get_xray_trace(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get X-Ray trace details.
     
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace details
@@ -59,14 +61,15 @@ def get_xray_trace(trace_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_all_resources_from_trace(trace_id: str, region: str = "eu-west-1") -> str:
+def get_all_resources_from_trace(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Extract ALL AWS resources involved in an X-Ray trace.
     This discovers Lambda functions, Step Functions, API Gateways, and other services.
 
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all discovered resources and their metadata
@@ -159,14 +162,15 @@ def get_all_resources_from_trace(trace_id: str, region: str = "eu-west-1") -> st
 
 
 @tool
-def get_xray_service_graph(service_name: str = None, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_xray_service_graph(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get X-Ray service graph showing service dependencies.
     
     Args:
         service_name: Optional service name to filter by
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with service graph data
@@ -205,7 +209,8 @@ def get_xray_service_graph(service_name: str = None, hours_back: int = 1, region
 
 
 @tool
-def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: str = None, region: str = "eu-west-1") -> str:
+def get_xray_trace_summaries(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get X-Ray trace summaries for a time range.
     
@@ -213,7 +218,7 @@ def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: 
         start_time: Start time in ISO format (e.g., "2024-01-01T00:00:00Z")
         end_time: End time in ISO format (e.g., "2024-01-01T23:59:59Z")
         filter_expression: Optional filter expression
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace summaries

@@ -26,26 +26,13 @@ import os
 import asyncio
 from typing import Dict, Any
 from strands import Agent
-from strands.models import BedrockModel
 
 from .core import SherlockInvestigator
-
-# Default region - can be overridden by environment variable
-DEFAULT_REGION = "eu-west-1"
-
-
-def get_region() -> str:
-    """Get region from environment variable."""
-    return os.getenv("AWS_REGION", DEFAULT_REGION)
-
+from .utils.config import get_region, create_bedrock_model
 
 # Configure Bedrock model - initialized once, reused across invocations
 # In Lambda, this happens during cold start and is reused for warm invocations
-bedrock_model = BedrockModel(
-    model_id="openai.gpt-oss-120b-1:0",  # GPT-OSS 120B
-    temperature=0.7,
-    streaming=False
-)
+bedrock_model = create_bedrock_model()
 
 agent = Agent(model=bedrock_model)
 

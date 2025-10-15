@@ -23,21 +23,23 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = "eu-west-1") -> str:
+def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = None) -> str:
     """
     Get API Gateway stage configuration including integration details (Lambda, Step Functions, etc.).
 
     Args:
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with stage configuration and integration details
     """
+    region = region or get_region()
     import boto3
 
     try:
@@ -112,13 +114,14 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = "eu
 
 
 @tool
-def get_iam_role_config(role_name: str, region: str = "eu-west-1") -> str:
+def get_iam_role_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get IAM role configuration including trust policy and attached policies.
     
     Args:
         role_name: The IAM role name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with role configuration
@@ -170,13 +173,14 @@ def get_iam_role_config(role_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_lambda_config(function_name: str, region: str = "eu-west-1") -> str:
+def get_lambda_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Lambda function configuration including environment variables and IAM role.
     
     Args:
         function_name: The Lambda function name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda configuration
@@ -207,13 +211,14 @@ def get_lambda_config(function_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_stepfunctions_definition(state_machine_arn: str, region: str = "eu-west-1") -> str:
+def get_stepfunctions_definition(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Step Functions state machine definition.
     
     Args:
         state_machine_arn: The state machine ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with state machine definition
@@ -241,13 +246,14 @@ def get_stepfunctions_definition(state_machine_arn: str, region: str = "eu-west-
 
 
 @tool
-def get_xray_trace(trace_id: str, region: str = "eu-west-1") -> str:
+def get_xray_trace(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get X-Ray trace details.
     
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace details
@@ -274,14 +280,15 @@ def get_xray_trace(trace_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_cloudwatch_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a log group.
     
     Args:
         log_group: The CloudWatch log group name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with log events
@@ -332,14 +339,15 @@ def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = "eu-w
 
 
 @tool
-def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_lambda_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a Lambda function.
     
     Args:
         function_name: The Lambda function name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda log events
@@ -394,7 +402,8 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = "eu-w
 
 
 @tool
-def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_apigateway_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for an API Gateway.
     
@@ -402,7 +411,7 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with API Gateway log events
@@ -458,14 +467,15 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
 
 
 @tool
-def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_stepfunctions_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a Step Functions state machine.
     
     Args:
         state_machine_arn: The Step Functions state machine ARN
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Step Functions log events

@@ -29,15 +29,16 @@ import json
 from ..models import InvestigationReport, InvestigationTarget, Fact, Hypothesis, Advice, SeverityAssessment, RootCauseAnalysis
 from ..clients import AWSClient
 from ..agents.lead_orchestrator import LeadOrchestratorAgent
+from ..utils.config import get_region
 
 
 class SherlockInvestigator:
     """Main Sherlock AI investigator class."""
     
-    def __init__(self, region: str = "eu-west-1", 
+    def __init__(self, region: str = None, 
                  xray_trace_id: str = None, investigation_target: Dict[str, Any] = None, strands_agent=None):
         """Initialize the investigator."""
-        self.region = region
+        self.region = region or get_region()
         self.run_id = str(uuid.uuid4())
         self.start_time = datetime.now(timezone.utc)
         self.xray_trace_id = xray_trace_id
@@ -45,7 +46,7 @@ class SherlockInvestigator:
         
         
         # Initialize AWS client (always use real AWS)
-        self.aws_client = AWSClient(region=region)
+        self.aws_client = AWSClient(region=self.region)
         
         # Initialize orchestrator with strands agent
         self.orchestrator = LeadOrchestratorAgent(strands_agent)

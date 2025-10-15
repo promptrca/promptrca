@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_lambda_config(function_name: str, region: str = "eu-west-1") -> str:
+def get_lambda_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Lambda function configuration including environment variables and IAM role.
     
     Args:
         function_name: The Lambda function name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda configuration
@@ -63,14 +65,15 @@ def get_lambda_config(function_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_lambda_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a Lambda function.
     
     Args:
         function_name: The Lambda function name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda log events
@@ -125,14 +128,15 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = "eu-w
 
 
 @tool
-def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_lambda_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for a Lambda function.
     
     Args:
         function_name: The Lambda function name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda metrics
@@ -188,13 +192,14 @@ def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = "
 
 
 @tool
-def get_lambda_layers(function_name: str, region: str = "eu-west-1") -> str:
+def get_lambda_layers(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Lambda function layers information.
     
     Args:
         function_name: The Lambda function name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda layers details

@@ -25,6 +25,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from ..models import Fact
 from ..utils import get_logger
+from ..utils.config import get_region
 
 logger = get_logger(__name__)
 
@@ -32,12 +33,12 @@ logger = get_logger(__name__)
 class LogQueryClient:
     """Client for querying CloudWatch Logs using Logs Insights."""
 
-    def __init__(self, region: str = "eu-west-1"):
+    def __init__(self, region: str = None):
         """Initialize the log query client."""
-        self.region = region
+        self.region = region or get_region()
         # Initialize logs client
         import boto3
-        self.logs_client = boto3.client('logs', region_name=region)
+        self.logs_client = boto3.client('logs', region_name=self.region)
 
     def query_lambda_failed_invocations(
         self,

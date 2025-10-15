@@ -25,14 +25,15 @@ import json
 
 
 @tool
-def query_logs_by_trace_id(trace_id: str, region: str = "eu-west-1") -> str:
+def query_logs_by_trace_id(query: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Query CloudWatch Logs Insights for ALL logs related to a specific X-Ray trace ID.
     This is THE KEY tool for trace-driven investigation - it correlates logs with traces.
 
     Args:
         trace_id: The X-Ray trace ID to search for (e.g., "1-68e915e7-7a2c7c6d1427db5e5b97c431")
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all logs matching the trace ID across all log groups
@@ -138,14 +139,15 @@ def query_logs_by_trace_id(trace_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_stepfunctions_execution_details(execution_arn: str, region: str = "eu-west-1") -> str:
+def get_stepfunctions_execution_details(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get detailed Step Functions execution information including status, input, output, and history.
     Use this when you have a Step Functions execution ARN to investigate what happened.
 
     Args:
         execution_arn: The Step Functions execution ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with execution details including history events
@@ -194,7 +196,8 @@ def get_stepfunctions_execution_details(execution_arn: str, region: str = "eu-we
 
 
 @tool
-def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> str:
+def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Resolve API Gateway name or ID to the actual REST API ID.
     Handles both cases:
@@ -203,7 +206,7 @@ def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> st
 
     Args:
         api_name_or_id: API Gateway name or ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with the REST API ID
@@ -248,14 +251,15 @@ def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> st
 
 
 @tool
-def get_all_resources_from_trace(trace_id: str, region: str = "eu-west-1") -> str:
+def get_all_resources_from_trace(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Extract ALL AWS resources involved in an X-Ray trace.
     This discovers Lambda functions, Step Functions, API Gateways, and other services.
 
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all discovered resources and their metadata

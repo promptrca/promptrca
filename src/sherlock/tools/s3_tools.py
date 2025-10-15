@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_s3_bucket_config(bucket_name: str, region: str = "eu-west-1") -> str:
+def get_s3_bucket_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get S3 bucket configuration and properties.
     
     Args:
         bucket_name: The S3 bucket name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket configuration
@@ -89,14 +91,15 @@ def get_s3_bucket_config(bucket_name: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_s3_bucket_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for an S3 bucket.
     
     Args:
         bucket_name: The S3 bucket name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket metrics
@@ -156,7 +159,8 @@ def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24, region: str = 
 
 
 @tool
-def list_s3_bucket_objects(bucket_name: str, prefix: str = "", max_keys: int = 100, region: str = "eu-west-1") -> str:
+def list_s3_bucket_objects(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List S3 bucket objects (for debugging purposes).
     
@@ -164,7 +168,7 @@ def list_s3_bucket_objects(bucket_name: str, prefix: str = "", max_keys: int = 1
         bucket_name: The S3 bucket name
         prefix: Object key prefix to filter by
         max_keys: Maximum number of objects to return (default: 100)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with object list
@@ -209,13 +213,14 @@ def list_s3_bucket_objects(bucket_name: str, prefix: str = "", max_keys: int = 1
 
 
 @tool
-def get_s3_bucket_policy(bucket_name: str, region: str = "eu-west-1") -> str:
+def get_s3_bucket_policy(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get S3 bucket policy.
     
     Args:
         bucket_name: The S3 bucket name
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket policy

@@ -23,16 +23,18 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_stepfunctions_definition(state_machine_arn: str, region: str = "eu-west-1") -> str:
+def get_stepfunctions_definition(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get Step Functions state machine definition.
     
     Args:
         state_machine_arn: The state machine ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with state machine definition
@@ -60,14 +62,15 @@ def get_stepfunctions_definition(state_machine_arn: str, region: str = "eu-west-
 
 
 @tool
-def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_stepfunctions_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a Step Functions state machine.
     
     Args:
         state_machine_arn: The Step Functions state machine ARN
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Step Functions log events
@@ -126,14 +129,15 @@ def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: 
 
 
 @tool
-def get_stepfunctions_execution_details(execution_arn: str, region: str = "eu-west-1") -> str:
+def get_stepfunctions_execution_details(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get detailed Step Functions execution information including status, input, output, and history.
     Use this when you have a Step Functions execution ARN to investigate what happened.
 
     Args:
         execution_arn: The Step Functions execution ARN
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with execution details including history events
@@ -182,14 +186,15 @@ def get_stepfunctions_execution_details(execution_arn: str, region: str = "eu-we
 
 
 @tool
-def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_stepfunctions_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for a Step Functions state machine.
     
     Args:
         state_machine_arn: The Step Functions state machine ARN
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Step Functions metrics

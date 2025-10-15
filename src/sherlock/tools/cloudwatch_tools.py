@@ -23,17 +23,19 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_cloudwatch_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for a log group.
     
     Args:
         log_group: The CloudWatch log group name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with log events
@@ -84,14 +86,15 @@ def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = "eu-w
 
 
 @tool
-def query_logs_by_trace_id(trace_id: str, region: str = "eu-west-1") -> str:
+def query_logs_by_trace_id(query: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Query CloudWatch Logs Insights for ALL logs related to a specific X-Ray trace ID.
     This is THE KEY tool for trace-driven investigation - it correlates logs with traces.
 
     Args:
         trace_id: The X-Ray trace ID to search for (e.g., "1-68e915e7-7a2c7c6d1427db5e5b97c431")
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all logs matching the trace ID across all log groups
@@ -197,7 +200,8 @@ def query_logs_by_trace_id(trace_id: str, region: str = "eu-west-1") -> str:
 
 
 @tool
-def get_cloudwatch_metrics(namespace: str, metric_name: str, dimensions: list = None, hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_cloudwatch_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for a specific namespace and metric.
     
@@ -206,7 +210,7 @@ def get_cloudwatch_metrics(namespace: str, metric_name: str, dimensions: list = 
         metric_name: The metric name (e.g., "Invocations", "Errors")
         dimensions: List of dimension dictionaries (e.g., [{"Name": "FunctionName", "Value": "my-function"}])
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with metric data
@@ -252,13 +256,14 @@ def get_cloudwatch_metrics(namespace: str, metric_name: str, dimensions: list = 
 
 
 @tool
-def get_cloudwatch_alarms(alarm_names: list = None, region: str = "eu-west-1") -> str:
+def get_cloudwatch_alarms(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch alarms and their status.
     
     Args:
         alarm_names: Optional list of alarm names to filter by
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with alarm information
@@ -301,12 +306,13 @@ def get_cloudwatch_alarms(alarm_names: list = None, region: str = "eu-west-1") -
 
 
 @tool
-def list_cloudwatch_dashboards(region: str = "eu-west-1") -> str:
+def list_cloudwatch_dashboards(list: str, region: str = None) -> str:
+    region = region or get_region()
     """
     List CloudWatch dashboards.
     
     Args:
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with dashboard information

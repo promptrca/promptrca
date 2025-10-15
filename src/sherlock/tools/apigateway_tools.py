@@ -23,17 +23,19 @@ Contact: christiangenn99+sherlock@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
+from ..utils.config import get_region
 
 
 @tool
-def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = "eu-west-1") -> str:
+def get_api_gateway_stage_config(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get API Gateway stage configuration including integration details (Lambda, Step Functions, etc.).
 
     Args:
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with stage configuration and integration details
@@ -112,7 +114,8 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = "eu
 
 
 @tool
-def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = "eu-west-1") -> str:
+def get_apigateway_logs(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch logs for an API Gateway.
     
@@ -120,7 +123,7 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with API Gateway log events
@@ -176,7 +179,8 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
 
 
 @tool
-def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> str:
+def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Resolve API Gateway name or ID to the actual REST API ID.
     Handles both cases:
@@ -185,7 +189,7 @@ def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> st
 
     Args:
         api_name_or_id: API Gateway name or ID
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
 
     Returns:
         JSON string with the REST API ID
@@ -230,7 +234,8 @@ def resolve_api_gateway_id(api_name_or_id: str, region: str = "eu-west-1") -> st
 
 
 @tool
-def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: int = 24, region: str = "eu-west-1") -> str:
+def get_api_gateway_metrics(get: str, region: str = None) -> str:
+    region = region or get_region()
     """
     Get CloudWatch metrics for an API Gateway.
     
@@ -238,7 +243,7 @@ def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: i
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: eu-west-1)
+        region: AWS region (default: from environment)
     
     Returns:
         JSON string with API Gateway metrics
