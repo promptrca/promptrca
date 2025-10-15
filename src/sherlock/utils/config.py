@@ -86,6 +86,42 @@ def create_bedrock_model() -> BedrockModel:
     return BedrockModel(**config)
 
 
+def get_memory_config() -> Dict[str, Any]:
+    """
+    Get memory system configuration from environment variables.
+    
+    Returns:
+        Dict[str, Any]: Memory system configuration
+    """
+    return {
+        "enabled": os.getenv("SHERLOCK_MEMORY_ENABLED", "false").lower() == "true",
+        "endpoint": os.getenv("SHERLOCK_MEMORY_ENDPOINT", ""),
+        "auth_type": os.getenv("SHERLOCK_MEMORY_AUTH_TYPE", "api_key"),
+        "api_key": os.getenv("SHERLOCK_MEMORY_API_KEY", ""),
+        "max_results": int(os.getenv("SHERLOCK_MEMORY_MAX_RESULTS", "5")),
+        "min_quality": float(os.getenv("SHERLOCK_MEMORY_MIN_QUALITY", "0.7")),
+        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000"))
+    }
+
+
+def get_opensearch_config() -> Dict[str, Any]:
+    """
+    Get OpenSearch configuration from environment variables.
+    
+    Returns:
+        Dict[str, Any]: OpenSearch configuration
+    """
+    return {
+        "enabled": os.getenv("SHERLOCK_MEMORY_ENABLED", "false").lower() == "true",
+        "endpoint": os.getenv("SHERLOCK_MEMORY_ENDPOINT", "http://opensearch:9200"),
+        "auth_type": os.getenv("SHERLOCK_MEMORY_AUTH_TYPE", "api_key"),
+        "api_key": os.getenv("SHERLOCK_MEMORY_API_KEY", ""),
+        "max_results": int(os.getenv("SHERLOCK_MEMORY_MAX_RESULTS", "5")),
+        "min_quality": float(os.getenv("SHERLOCK_MEMORY_MIN_QUALITY", "0.7")),
+        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000"))
+    }
+
+
 def get_environment_info() -> Dict[str, str]:
     """
     Get information about current environment configuration.
@@ -99,5 +135,7 @@ def get_environment_info() -> Dict[str, str]:
         "temperature": os.getenv("SHERLOCK_TEMPERATURE", "0.7"),
         "max_tokens": os.getenv("SHERLOCK_MAX_TOKENS", "not set"),
         "aws_region": os.getenv("AWS_REGION", "not set"),
-        "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set")
+        "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set"),
+        "memory_enabled": os.getenv("SHERLOCK_MEMORY_ENABLED", "false"),
+        "memory_endpoint": os.getenv("SHERLOCK_MEMORY_ENDPOINT", "not set")
     }

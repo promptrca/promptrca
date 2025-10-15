@@ -30,7 +30,8 @@ from dataclasses import dataclass, field
 from strands import Agent, tool
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
-from ..utils.config import get_region
+from ..utils.config import get_region, get_memory_config
+from ..memory import MemoryClient, MemoryResult
 from ..agents.input_parser_agent import ParsedInputs, ParsedResource
 from ..agents.specialized.lambda_agent import create_lambda_agent, create_lambda_agent_tool
 from ..agents.specialized.apigateway_agent import create_apigateway_agent, create_apigateway_agent_tool
@@ -112,6 +113,10 @@ class LeadOrchestratorAgent:
         strands_agent = Agent(model=model)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
         
+        # Initialize memory client (NEW)
+        memory_config = get_memory_config()
+        self.memory_client = MemoryClient(memory_config) if memory_config["enabled"] else None
+        
         # Create the lead orchestrator agent with all specialist tools
         self.lead_agent = self._create_lead_agent()
     
@@ -190,17 +195,20 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # 2. Build investigation context
             context = self._build_investigation_context(parsed_inputs)
 
-            # 3. Create investigation prompt for lead agent
-            investigation_prompt = self._create_investigation_prompt(context)
+            # 3. Query memory if available (NEW)
+            memory_context = await self._get_memory_context(context)
 
-            # 4. Run lead orchestrator agent
+            # 4. Create investigation prompt for lead agent (enhanced with memory)
+            investigation_prompt = self._create_investigation_prompt(context, memory_context)
+
+            # 5. Run lead orchestrator agent
             logger.info("🤖 Running lead orchestrator agent...")
             agent_result = self.lead_agent(investigation_prompt)
             
-            # 5. Parse agent response and extract structured data
-            facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
+            # 6. Parse agent response and extract structured data
+            facts, hypotheses, advice = self._parse_agent_response(agent_result, context, memory_context)
 
-            # 6. Generate investigation report
+            # 7. Generate investigation report
             report = self._generate_investigation_report(context, facts, hypotheses, advice, region)
 
             return report
@@ -282,8 +290,89 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             time_range=parsed_inputs.time_range
         )
     
-    def _create_investigation_prompt(self, context: InvestigationContext) -> str:
-        """Create investigation prompt for the lead orchestrator agent."""
+    async def _get_memory_context(self, context: InvestigationContext) -> Optional[str]:
+        """Query memory and format context for prompt"""
+        if not self.memory_client or not context.primary_targets:
+            return None
+        
+        target = context.primary_targets[0]
+        error_msg = context.error_messages[0] if context.error_messages else ""
+        
+        try:
+            # Query memory
+            similar = await self.memory_client.find_similar(
+                query=error_msg,
+                filters={
+                    "resource_type": target.type,
+                    "min_quality_score": 0.7
+                },
+                limit=5
+            )
+            
+            if not similar:
+                return None
+            
+            # Format memory context
+            return self._format_memory_context(similar)
+            
+        except Exception as e:
+            logger.warning(f"Memory query failed: {e}, continuing without memory")
+            return None
+    
+    def _format_memory_context(self, similar: List[MemoryResult]) -> str:
+        """Format memory results for prompt injection"""
+        context = "\n" + "="*60 + "\n"
+        context += "RELEVANT PAST INVESTIGATIONS (from memory system)\n"
+        context += "="*60 + "\n\n"
+        
+        for i, mem in enumerate(similar, 1):
+            outcome_icon = "✓" if mem.outcome == "resolved" else "⚠" if mem.outcome == "partial" else "✗"
+            
+            context += f"{i}. Investigation #{mem.investigation_id} (similarity: {mem.similarity_score:.2f})\n"
+            context += f"   Resource: {mem.resource_type}:{mem.resource_name}\n"
+            context += f"   Root Cause: {mem.root_cause_summary}\n"
+            context += f"   Solution: {mem.advice_summary}\n"
+            context += f"   Outcome: {outcome_icon} {mem.outcome.upper()} (quality: {mem.quality_score:.2f})\n"
+            context += f"   Date: {mem.created_at}\n\n"
+        
+        # Add learned patterns
+        patterns = self._extract_patterns(similar)
+        if patterns:
+            context += "\nLEARNED PATTERNS:\n"
+            context += patterns + "\n"
+        
+        context += "="*60 + "\n"
+        context += "Use the above historical context to inform your investigation.\n"
+        context += "Prioritize solutions that have been proven effective.\n"
+        context += "="*60 + "\n\n"
+        
+        return context
+    
+    def _extract_patterns(self, similar: List[MemoryResult]) -> str:
+        """Extract common patterns from similar investigations"""
+        # Count most common root causes
+        root_causes = {}
+        successful_advice = {}
+        
+        for mem in similar:
+            if mem.outcome == "resolved":
+                root_causes[mem.error_type] = root_causes.get(mem.error_type, 0) + 1
+                successful_advice[mem.advice_summary] = successful_advice.get(mem.advice_summary, 0) + 1
+        
+        patterns = []
+        
+        if root_causes:
+            most_common = max(root_causes.items(), key=lambda x: x[1])
+            patterns.append(f"- {most_common[0]} is the most common root cause ({most_common[1]}/{len(similar)} cases)")
+        
+        if successful_advice:
+            top_advice = max(successful_advice.items(), key=lambda x: x[1])
+            patterns.append(f"- Successfully resolved {top_advice[1]} times with: {top_advice[0]}")
+        
+        return "\n".join(patterns) if patterns else ""
+    
+    def _create_investigation_prompt(self, context: InvestigationContext, memory_context: Optional[str] = None) -> str:
+        """Create investigation prompt for the lead orchestrator agent (enhanced with memory)"""
         prompt_parts = []
         
         # Add investigation context
@@ -302,16 +391,22 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         if context.business_context:
             prompt_parts.append(f"Business Context: {context.business_context}")
         
+        # Inject memory context (NEW)
+        if memory_context:
+            prompt_parts.append(memory_context)
+        
         # Add investigation instructions
         prompt_parts.append("\nTASK:")
         prompt_parts.append("Conduct a comprehensive root cause analysis using specialist agents.")
+        if memory_context:
+            prompt_parts.append("Use the historical context above to inform your analysis and recommendations.")
         prompt_parts.append("Start with X-Ray trace analysis if available, then investigate relevant services.")
         prompt_parts.append("Synthesize findings from multiple specialists to identify the root cause.")
         prompt_parts.append("Provide specific, actionable recommendations for remediation.")
         
         return "\n".join(prompt_parts)
     
-    def _parse_agent_response(self, agent_result, context: InvestigationContext) -> (List[Fact], List[Hypothesis], List[Advice]):
+    def _parse_agent_response(self, agent_result, context: InvestigationContext, memory_context: Optional[str] = None) -> (List[Fact], List[Hypothesis], List[Advice]):
         """Parse the lead agent's response to extract structured data."""
         # Extract response content
         response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
@@ -330,6 +425,13 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             metadata={"investigation_type": "multi_agent", "agent_count": 10}
         ))
         
+        # Extract memory results if available
+        memory_results = None
+        if memory_context and self.memory_client:
+            # Try to extract memory results from the context
+            # This is a simplified approach - in practice, you'd want to store the actual MemoryResult objects
+            memory_results = []  # For now, we'll pass empty list
+        
         # Generate hypotheses if none provided
         if not hypotheses:
             from .hypothesis_agent import HypothesisAgent
@@ -337,13 +439,13 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # Wrap the model in a Strands Agent
             strands_agent = Agent(model=self.model)
             hypothesis_agent = HypothesisAgent(strands_agent=strands_agent)
-            hypotheses = hypothesis_agent.generate_hypotheses(facts)
+            hypotheses = hypothesis_agent.generate_hypotheses(facts, memory_results)
         
         # Generate advice if none provided
         if not advice and hypotheses:
             from .advice_agent import AdviceAgent
             advice_agent = AdviceAgent()
-            advice = advice_agent.generate_advice(facts, hypotheses)
+            advice = advice_agent.generate_advice(facts, hypotheses, memory_results)
         
         return facts, hypotheses, advice
     
