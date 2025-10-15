@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+Sherlock Core - AI-powered root cause analysis for AWS infrastructure
+Copyright (C) 2025 Christian Gennaro Faraone
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Contact: christiangenn99+sherlock@gmail.com
+
+"""
+
+from typing import Any
+from strands import Agent
+from ...tools.aws_tools import (
+    get_stepfunctions_definition,
+    get_iam_role_config,
+    get_cloudwatch_logs
+)
+
+
+def create_stepfunctions_agent(model) -> Agent:
+    """Create a Step Functions specialist agent with tools."""
+    system_prompt = """You are a Step Functions specialist. Investigate Step Functions issues quickly and precisely.
+
+PROCESS:
+1) Get state machine definition
+2) Check IAM permissions if execution issues
+3) Check logs for errors
+
+TOOLS:
+- get_stepfunctions_definition(state_machine_arn, region?)
+- get_iam_role_config(role_name, region?)
+- get_cloudwatch_logs(log_group, region?)
+
+OUTPUT: Respond with ONLY JSON using this schema:
+{
+  "facts": [
+    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
+  ],
+  "hypotheses": [
+    {"type": "configuration_error|permission_issue|integration_failure|timeout|resource_constraint|infrastructure_issue|code_bug", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
+  ],
+  "advice": [
+    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
+  ],
+  "summary": "<= 120 words concise conclusion"
+}"""
+
+    return Agent(
+        model=model,
+        system_prompt=system_prompt,
+        tools=[get_stepfunctions_definition, get_iam_role_config, get_cloudwatch_logs]
+    )
+
+
+def create_stepfunctions_agent_tool(stepfunctions_agent: Agent):
+    """Create a tool that wraps the Step Functions agent for use by orchestrators."""
+    from strands import tool
+
+    @tool
+    def investigate_stepfunctions(state_machine_arn: str, investigation_context: str = "") -> str:
+        import json
+        try:
+            prompt = f"""Investigate Step Functions state machine: {state_machine_arn}
+
+Context: {investigation_context}
+
+Please analyze this Step Functions state machine for any issues, errors, or problems. Start by getting the state machine definition, then check IAM permissions if execution issues are suspected, and examine logs for errors."""
+            agent_result = stepfunctions_agent(prompt)
+            response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
+
+            def _extract_json(s: str):
+                try:
+                    import json as _json
+                    text = s.strip()
+                    if "```" in text:
+                        if "```json" in text:
+                            text = text.split("```json", 1)[1].split("```", 1)[0]
+                        else:
+                            text = text.split("```", 1)[1].split("```", 1)[0]
+                    return _json.loads(text)
+                except Exception:
+                    return None
+
+            data = _extract_json(response) or {}
+            # Basic validation and normalization
+            if isinstance(data.get("facts"), dict) or isinstance(data.get("facts"), str):
+                data["facts"] = [data.get("facts")]
+            if isinstance(data.get("hypotheses"), dict):
+                data["hypotheses"] = [data.get("hypotheses")]
+            if isinstance(data.get("advice"), dict):
+                data["advice"] = [data.get("advice")]
+
+            summary = data.get("summary") or (response[:500] + "..." if len(str(response)) > 500 else str(response))
+
+            return json.dumps({
+                "target": {"type": "step_functions", "state_machine_arn": state_machine_arn},
+                "context": investigation_context,
+                "status": "completed",
+                "facts": data.get("facts") or [],
+                "hypotheses": data.get("hypotheses") or [],
+                "advice": data.get("advice") or [],
+                "artifacts": {"raw_analysis": str(response)},
+                "summary": summary
+            })
+        except Exception as e:
+            return json.dumps({
+                "target": {"type": "step_functions", "state_machine_arn": state_machine_arn},
+                "context": investigation_context,
+                "status": "failed",
+                "error": str(e)
+            })
+
+    return investigate_stepfunctions
+
