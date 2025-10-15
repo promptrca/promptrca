@@ -54,7 +54,7 @@ def get_bedrock_model_config() -> Dict[str, Any]:
     Get Bedrock model configuration from environment variables.
     
     Supported environment variables:
-    - SHERLOCK_MODEL_ID: Bedrock model identifier (default: "openai.gpt-oss-120b-1:0")
+    - BEDROCK_MODEL_ID: Bedrock model identifier (default: "openai.gpt-oss-120b-1:0")
     - SHERLOCK_TEMPERATURE: Model temperature 0.0-1.0 (default: 0.7)
     - SHERLOCK_MAX_TOKENS: Maximum tokens (optional)
     
@@ -62,7 +62,7 @@ def get_bedrock_model_config() -> Dict[str, Any]:
         Dict[str, Any]: Configuration dictionary for BedrockModel
     """
     config = {
-        "model_id": os.getenv("SHERLOCK_MODEL_ID", "openai.gpt-oss-120b-1:0"),
+        "model_id": os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"),
         "temperature": float(os.getenv("SHERLOCK_TEMPERATURE", "0.7")),
         "streaming": False
     }
@@ -95,7 +95,7 @@ def get_environment_info() -> Dict[str, str]:
     """
     return {
         "region": get_region(),
-        "model_id": os.getenv("SHERLOCK_MODEL_ID", "openai.gpt-oss-120b-1:0"),
+        "model_id": os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"),
         "temperature": os.getenv("SHERLOCK_TEMPERATURE", "0.7"),
         "max_tokens": os.getenv("SHERLOCK_MAX_TOKENS", "not set"),
         "aws_region": os.getenv("AWS_REGION", "not set"),
