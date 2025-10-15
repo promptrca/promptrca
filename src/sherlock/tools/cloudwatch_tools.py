@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_cloudwatch_logs(get: str, region: str = None) -> str:
+def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a log group.
@@ -200,7 +200,7 @@ def query_logs_by_trace_id(query: str, region: str = None) -> str:
 
 
 @tool
-def get_cloudwatch_metrics(get: str, region: str = None) -> str:
+def get_cloudwatch_metrics(metric_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for a specific namespace and metric.
@@ -256,7 +256,7 @@ def get_cloudwatch_metrics(get: str, region: str = None) -> str:
 
 
 @tool
-def get_cloudwatch_alarms(get: str, region: str = None) -> str:
+def get_cloudwatch_alarms(alarm_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch alarms and their status.

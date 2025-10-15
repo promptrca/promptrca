@@ -90,31 +90,17 @@ class RootCauseAgent:
         # Sample key facts for context
         sample_facts = [f.content for f in facts[:5]]
 
-        prompt = f"""You are an expert incident response analyst. Analyze these hypotheses to identify the primary root cause and contributing factors.
+        prompt = f"""Select PRIMARY root cause from hypotheses (already sorted by confidence).
 
-HYPOTHESES (sorted by confidence):
-{chr(10).join(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f}, evidence: {h['evidence_count']})" for i, h in enumerate(hypothesis_data))}
+HYPOTHESES:
+{chr(10).join(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f})" for i, h in enumerate(hypothesis_data))}
 
-KEY FACTS CONTEXT:
-{chr(10).join(f"- {fact}" for fact in sample_facts)}
+RULES:
+- Primary = highest confidence hypothesis that explains the incident
+- Contributing factors = other high-confidence hypotheses
+- Summary: 1-2 sentences explaining selection
 
-Your task:
-1. Identify the PRIMARY root cause (the most fundamental issue that, if fixed, would resolve the incident)
-2. Identify CONTRIBUTING factors (other issues that may have contributed but are not the root cause)
-3. Provide a clear analysis summary
-
-Guidelines:
-- Primary root cause should be the most fundamental issue
-- Contributing factors are secondary issues that may have made the problem worse
-- Consider confidence levels and evidence strength
-- Look for causal relationships between hypotheses
-
-Respond with ONLY a JSON object:
-{{
-    "primary_root_cause_index": 0,
-    "contributing_factor_indices": [1, 2],
-    "analysis_summary": "Clear explanation of why this is the root cause and how contributing factors relate..."
-}}"""
+OUTPUT: JSON {"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "analysis_summary": "..."}"""
 
         try:
             # Use Strands agent

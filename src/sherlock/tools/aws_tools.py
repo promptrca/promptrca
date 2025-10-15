@@ -114,7 +114,7 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = Non
 
 
 @tool
-def get_iam_role_config(get: str, region: str = None) -> str:
+def get_iam_role_config(role_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get IAM role configuration including trust policy and attached policies.
@@ -173,7 +173,7 @@ def get_iam_role_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_config(get: str, region: str = None) -> str:
+def get_lambda_config(function_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Lambda function configuration including environment variables and IAM role.
@@ -211,7 +211,7 @@ def get_lambda_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_definition(get: str, region: str = None) -> str:
+def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Step Functions state machine definition.
@@ -246,7 +246,7 @@ def get_stepfunctions_definition(get: str, region: str = None) -> str:
 
 
 @tool
-def get_xray_trace(get: str, region: str = None) -> str:
+def get_xray_trace(trace_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get X-Ray trace details.
@@ -280,7 +280,7 @@ def get_xray_trace(get: str, region: str = None) -> str:
 
 
 @tool
-def get_cloudwatch_logs(get: str, region: str = None) -> str:
+def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a log group.
@@ -339,7 +339,7 @@ def get_cloudwatch_logs(get: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_logs(get: str, region: str = None) -> str:
+def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a Lambda function.
@@ -402,7 +402,7 @@ def get_lambda_logs(get: str, region: str = None) -> str:
 
 
 @tool
-def get_apigateway_logs(get: str, region: str = None) -> str:
+def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for an API Gateway.
@@ -467,7 +467,7 @@ def get_apigateway_logs(get: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_logs(get: str, region: str = None) -> str:
+def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a Step Functions state machine.

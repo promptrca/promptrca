@@ -61,60 +61,26 @@ class HypothesisAgent:
         # Build the prompt for AI
         facts_text = "\n".join([f"- [{f.source}] {f.content} (confidence: {f.confidence:.2f})" for f in facts])
 
-        prompt = f"""You are an expert AWS serverless incident analyst. Analyze these facts and generate 3-5 root cause hypotheses.
+        prompt = f"""Generate hypotheses from facts. Use ONLY provided evidence - NO speculation.
 
 FACTS:
 {facts_text}
 
-CRITICAL RULE:
-- ONLY base hypotheses on facts provided above
-- DO NOT assume or invent services, resources, or configurations that are not mentioned in the facts
-- If facts mention "API Gateway integrates with Step Functions", DO NOT say "Lambda" anywhere
-- Be specific about what you actually observe in the facts
+CONFIDENCE ASSIGNMENT:
+- 0.95+: Explicit error/exception in logs
+- 0.85-0.94: Configuration mismatch observed
+- 0.70-0.84: Strong correlation between facts
+- <0.70: Weak signal
 
-HYPOTHESIS PRIORITIZATION PRINCIPLES:
-When analyzing incidents, distinguish between CAUSES and SYMPTOMS:
+HYPOTHESIS TYPES:
+permission_issue, configuration_error, code_bug, timeout, resource_constraint, integration_failure, infrastructure_issue
 
-1. **Direct Causes** (High Confidence 0.85-0.99):
-   - Application errors: exceptions, runtime errors, code crashes, unhandled errors
-   - Logic bugs: division by zero, null/undefined references, type mismatches
-   - Resource exhaustion: out of memory, disk full, connection pool exhausted
-   - Configuration problems: invalid settings that prevent execution
-   - Permission denials: IAM policies blocking required actions
+RULES:
+- Each hypothesis must cite specific facts as evidence
+- Do NOT invent scenarios not in facts
+- Rank by confidence (highest first)
 
-2. **Contributing Factors** (Medium Confidence 0.50-0.84):
-   - Performance issues: slow queries, inefficient algorithms, cold starts
-   - Resource constraints: low memory allocation, tight timeouts
-   - Integration problems: downstream service failures, network issues
-   - Rate limiting or throttling
-
-3. **Observable Symptoms** (Low Confidence 0.10-0.49):
-   - Missing logs or monitoring gaps (these hide the problem, they don't cause it)
-   - Lack of observability features
-   - Incomplete telemetry
-
-CONFIDENCE SCORING GUIDANCE:
-- If you find an exception or error in logs → this is a DIRECT CAUSE → confidence 0.85+
-- If you find performance degradation → this is a CONTRIBUTING FACTOR → confidence 0.50-0.84
-- If you find missing logs → this is a SYMPTOM of poor observability → confidence 0.10-0.49
-
-Generate hypotheses that:
-1. Explain the root cause of the incident (focus on DIRECT CAUSES first)
-2. Are specific and actionable
-3. Are ranked by likelihood/confidence (highest confidence = most likely root cause)
-4. Include supporting evidence from the facts
-
-Respond with ONLY a JSON array in this exact format:
-[
-  {{
-    "type": "category_name",
-    "description": "Clear explanation of the hypothesis",
-    "confidence": 0.95,
-    "evidence": ["fact 1", "fact 2"]
-  }}
-]
-
-Valid hypothesis types: code_bug, configuration_error, permission_issue, resource_constraint, timeout, infrastructure_issue, integration_failure"""
+OUTPUT: JSON [{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}]"""
 
         try:
             # Use Strands agent to generate hypotheses (call agent directly)

@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_eventbridge_rule_config(get: str, region: str = None) -> str:
+def get_eventbridge_rule_config(rule_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get EventBridge rule configuration.
@@ -66,7 +66,7 @@ def get_eventbridge_rule_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_targets(get: str, region: str = None) -> str:
+def get_eventbridge_targets(rule_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get EventBridge rule targets.
@@ -118,7 +118,7 @@ def get_eventbridge_targets(get: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_metrics(get: str, region: str = None) -> str:
+def get_eventbridge_metrics(rule_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for an EventBridge rule.
@@ -223,7 +223,7 @@ def list_eventbridge_rules(list: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_bus_config(get: str, region: str = None) -> str:
+def get_eventbridge_bus_config(event_bus_name: str = "default", region: str = None) -> str:
     region = region or get_region()
     """
     Get EventBridge event bus configuration.

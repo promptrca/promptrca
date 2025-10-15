@@ -94,13 +94,13 @@ class InvestigationReport:
     affected_resources: List['AffectedResource']
     
     # New: Severity & Impact
-    severity_assessment: 'SeverityAssessment'
+    severity_assessment: Optional['SeverityAssessment']
     
     # Existing (enhanced)
     facts: List[Fact]
     
     # New: Enhanced Root Cause
-    root_cause_analysis: 'RootCauseAnalysis'
+    root_cause_analysis: Optional['RootCauseAnalysis']
     
     # Existing
     hypotheses: List[Hypothesis]
@@ -121,12 +121,24 @@ class InvestigationReport:
                 "completed_at": self.completed_at.isoformat(),
                 "duration_seconds": self.duration_seconds
             },
-            "severity": self.severity_assessment.to_dict(),
+            "severity": self.severity_assessment.to_dict() if self.severity_assessment else {
+                "severity": "unknown",
+                "impact_scope": "unknown",
+                "affected_resource_count": 0,
+                "user_impact": "unknown",
+                "confidence": 0.0,
+                "reasoning": "Investigation failed"
+            },
             "affected_resources": {
                 "count": len(self.affected_resources),
                 "resources": [r.to_dict() for r in self.affected_resources]
             },
-            "root_cause": self.root_cause_analysis.to_dict(),
+            "root_cause": self.root_cause_analysis.to_dict() if self.root_cause_analysis else {
+                "primary_root_cause": None,
+                "contributing_factors": [],
+                "confidence_score": 0.0,
+                "analysis_summary": "Investigation failed"
+            },
             "timeline": [e.to_dict() for e in self.timeline],
             "facts": {
                 "count": len(self.facts),

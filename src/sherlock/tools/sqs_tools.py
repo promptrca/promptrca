@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_sqs_queue_config(get: str, region: str = None) -> str:
+def get_sqs_queue_config(queue_url: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get SQS queue configuration and attributes.
@@ -73,7 +73,7 @@ def get_sqs_queue_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_sqs_queue_metrics(get: str, region: str = None) -> str:
+def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for an SQS queue.
@@ -138,7 +138,7 @@ def get_sqs_queue_metrics(get: str, region: str = None) -> str:
 
 
 @tool
-def get_sqs_dead_letter_queue(get: str, region: str = None) -> str:
+def get_sqs_dead_letter_queue(queue_url: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get SQS dead letter queue configuration.

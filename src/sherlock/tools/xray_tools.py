@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_xray_trace(get: str, region: str = None) -> str:
+def get_xray_trace(trace_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get X-Ray trace details.
@@ -61,7 +61,7 @@ def get_xray_trace(get: str, region: str = None) -> str:
 
 
 @tool
-def get_all_resources_from_trace(get: str, region: str = None) -> str:
+def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Extract ALL AWS resources involved in an X-Ray trace.
@@ -162,7 +162,7 @@ def get_all_resources_from_trace(get: str, region: str = None) -> str:
 
 
 @tool
-def get_xray_service_graph(get: str, region: str = None) -> str:
+def get_xray_service_graph(service_name: str = None, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get X-Ray service graph showing service dependencies.
@@ -209,7 +209,7 @@ def get_xray_service_graph(get: str, region: str = None) -> str:
 
 
 @tool
-def get_xray_trace_summaries(get: str, region: str = None) -> str:
+def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: str = None, region: str = None) -> str:
     region = region or get_region()
     """
     Get X-Ray trace summaries for a time range.

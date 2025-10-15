@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_s3_bucket_config(get: str, region: str = None) -> str:
+def get_s3_bucket_config(bucket_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get S3 bucket configuration and properties.
@@ -91,7 +91,7 @@ def get_s3_bucket_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_s3_bucket_metrics(get: str, region: str = None) -> str:
+def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for an S3 bucket.
@@ -213,7 +213,7 @@ def list_s3_bucket_objects(list: str, region: str = None) -> str:
 
 
 @tool
-def get_s3_bucket_policy(get: str, region: str = None) -> str:
+def get_s3_bucket_policy(bucket_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get S3 bucket policy.

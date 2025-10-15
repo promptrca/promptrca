@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_dynamodb_table_config(get: str, region: str = None) -> str:
+def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get DynamoDB table configuration and status.
@@ -71,7 +71,7 @@ def get_dynamodb_table_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_dynamodb_table_metrics(get: str, region: str = None) -> str:
+def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for a DynamoDB table.

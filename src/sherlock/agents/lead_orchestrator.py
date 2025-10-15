@@ -106,8 +106,11 @@ class LeadOrchestratorAgent:
         # Initialize root cause agent for synthesis
         from .root_cause_agent import RootCauseAgent
         from ..clients.aws_client import AWSClient
+        from strands import Agent
         aws_client = AWSClient(region=self.region)
-        self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=model)
+        # Wrap the model in a Strands Agent
+        strands_agent = Agent(model=model)
+        self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
         
         # Create the lead orchestrator agent with all specialist tools
         self.lead_agent = self._create_lead_agent()
@@ -115,56 +118,34 @@ class LeadOrchestratorAgent:
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
         
-        system_prompt = """You are Sherlock, an expert AWS incident investigator and lead orchestrator. Your role is to coordinate specialist agents to conduct comprehensive root cause analysis of AWS serverless infrastructure issues.
+        system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
 
-**YOUR CAPABILITIES**:
-- You have access to specialist agents for each AWS service (Lambda, API Gateway, Step Functions, IAM, DynamoDB, S3, SQS, SNS, EventBridge, VPC)
-- You can call X-Ray trace analysis tools
-- You autonomously decide which specialists to consult based on investigation context
-- You synthesize findings from multiple specialists into coherent analysis
+INVESTIGATION FLOW:
+1. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
+2. From trace/context, identify AWS services involved
+3. Call appropriate specialist agent for each service (call ONCE per service)
+4. Return all findings - let downstream agents synthesize
 
-**INVESTIGATION PROCESS**:
-1. **Analyze Context**: Review the investigation request, error messages, and available resources
-2. **Gather Evidence**: Call appropriate specialist agents to investigate specific AWS services
-3. **Cross-Reference**: Use X-Ray traces to understand service interactions and discover additional resources
-4. **Synthesize Findings**: Combine evidence from multiple specialists to identify root causes
-5. **Generate Report**: Provide comprehensive analysis with facts, hypotheses, and actionable advice
+AVAILABLE SPECIALISTS:
+- investigate_lambda_function(function_name, context)
+- investigate_apigateway(api_id, stage, context)
+- investigate_stepfunctions(state_machine_arn, context)
+- investigate_iam_role(role_name, context)
+- investigate_dynamodb_issue(issue_description)
+- investigate_s3_issue(issue_description)
+- investigate_sqs_issue(issue_description)
+- investigate_sns_issue(issue_description)
+- investigate_eventbridge_issue(issue_description)
+- investigate_vpc_issue(issue_description)
 
-**SPECIALIST AGENTS AVAILABLE**:
-- investigate_lambda_function: For Lambda function issues
-- investigate_apigateway: For API Gateway issues  
-- investigate_stepfunctions: For Step Functions issues
-- investigate_iam_role: For IAM permission issues
-- investigate_dynamodb_table: For DynamoDB issues
-- investigate_s3_bucket: For S3 issues
-- investigate_sqs_queue: For SQS issues
-- investigate_sns_topic: For SNS issues
-- investigate_eventbridge_rule: For EventBridge issues
-- investigate_vpc: For VPC/network issues
+RULES:
+- Call specialists for services explicitly mentioned OR discovered in X-Ray trace
+- Provide context to specialists (error messages, trace findings)
+- Do NOT generate hypotheses yourself - specialists will do that
+- Do NOT speculate about services not observed
+- Be concise
 
-**X-RAY ANALYSIS**:
-- get_xray_trace: Analyze X-Ray traces to understand service interactions
-- Use trace data to discover additional resources that need investigation
-
-**INVESTIGATION STRATEGY**:
-- Start with X-Ray traces if available - they reveal the complete service interaction flow
-- Call specialists for each service mentioned in the trace or error context
-- Look for patterns: permission issues, timeouts, resource constraints, code bugs
-- Cross-reference findings between specialists to identify root causes
-- Focus on the most likely root cause based on evidence strength
-
-**RESPONSE FORMAT**:
-Provide a comprehensive analysis including:
-- Key facts discovered from specialists
-- Root cause hypotheses with confidence levels
-- Actionable advice for remediation
-- Timeline of events if trace data is available
-
-**IMPORTANT**:
-- Be thorough but efficient - call relevant specialists based on context
-- Synthesize findings rather than just listing individual specialist outputs
-- Focus on root causes, not just symptoms
-- Provide specific, actionable recommendations"""
+OUTPUT: Relay specialist findings without additional interpretation"""
 
         return Agent(
             model=self.model,
@@ -225,7 +206,9 @@ Provide a comprehensive analysis including:
             return report
         
         except Exception as e:
+            import traceback
             logger.error(f"❌ Investigation failed: {e}")
+            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
             
             # Return error report
             from ..models.base import InvestigationReport
@@ -350,7 +333,10 @@ Provide a comprehensive analysis including:
         # Generate hypotheses if none provided
         if not hypotheses:
             from .hypothesis_agent import HypothesisAgent
-            hypothesis_agent = HypothesisAgent(strands_agent=self.model)
+            from strands import Agent
+            # Wrap the model in a Strands Agent
+            strands_agent = Agent(model=self.model)
+            hypothesis_agent = HypothesisAgent(strands_agent=strands_agent)
             hypotheses = hypothesis_agent.generate_hypotheses(facts)
         
         # Generate advice if none provided

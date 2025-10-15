@@ -139,7 +139,7 @@ def query_logs_by_trace_id(query: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_execution_details(get: str, region: str = None) -> str:
+def get_stepfunctions_execution_details(execution_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get detailed Step Functions execution information including status, input, output, and history.
@@ -251,7 +251,7 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
 
 @tool
-def get_all_resources_from_trace(get: str, region: str = None) -> str:
+def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Extract ALL AWS resources involved in an X-Ray trace.

@@ -32,33 +32,23 @@ from ...tools.sns_tools import (
 
 def create_sns_agent(model) -> Agent:
     """Create an SNS specialist agent with tools."""
-    system_prompt = """You are an SNS specialist. Investigate SNS issues quickly and precisely.
-
-PROCESS:
-1) Get topic configuration
-2) Check topic metrics for delivery issues
-3) Check subscriptions and endpoints
-4) Identify specific issue
+    system_prompt = """You are an SNS specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_sns_topic_config(topic_arn, region?)
-- get_sns_topic_metrics(topic_name, region?)
-- get_sns_subscriptions(topic_arn, region?)
-- list_sns_topics(region?)
+- get_sns_topic_config(topic_arn, region?) → topic settings, delivery policy
+- get_sns_topic_metrics(topic_name, region?) → delivery success rate, errors
+- get_sns_subscriptions(topic_arn, region?) → subscription status
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "delivery_failure|subscription_issue|permission_issue|configuration_error|endpoint_issue|resource_constraint|infrastructure_issue|integration_failure", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}"""
+RULES:
+- Call each tool ONCE
+- Extract facts: topic settings, delivery rates, subscription status
+- Generate hypothesis from observations:
+  - Low delivery success rate → delivery_failure
+  - Subscription errors → subscription_issue
+  - Endpoint errors → endpoint_issue
+- NO speculation
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

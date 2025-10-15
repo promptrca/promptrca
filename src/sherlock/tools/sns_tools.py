@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_sns_topic_config(get: str, region: str = None) -> str:
+def get_sns_topic_config(topic_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get SNS topic configuration and attributes.
@@ -70,7 +70,7 @@ def get_sns_topic_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_sns_topic_metrics(get: str, region: str = None) -> str:
+def get_sns_topic_metrics(topic_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for an SNS topic.
@@ -135,7 +135,7 @@ def get_sns_topic_metrics(get: str, region: str = None) -> str:
 
 
 @tool
-def get_sns_subscriptions(get: str, region: str = None) -> str:
+def get_sns_subscriptions(topic_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get SNS topic subscriptions.

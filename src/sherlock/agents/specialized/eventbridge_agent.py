@@ -33,34 +33,23 @@ from ...tools.eventbridge_tools import (
 
 def create_eventbridge_agent(model) -> Agent:
     """Create an EventBridge specialist agent with tools."""
-    system_prompt = """You are an EventBridge specialist. Investigate EventBridge issues quickly and precisely.
-
-PROCESS:
-1) Get rule configuration
-2) Check rule targets and their status
-3) Check rule metrics for execution issues
-4) Identify specific issue
+    system_prompt = """You are an EventBridge specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_eventbridge_rule_config(rule_name, region?)
-- get_eventbridge_targets(rule_name, region?)
-- get_eventbridge_metrics(rule_name, region?)
-- list_eventbridge_rules(region?)
-- get_eventbridge_bus_config(event_bus_name?, region?)
+- get_eventbridge_rule_config(rule_name, region?) → rule settings, event pattern
+- get_eventbridge_targets(rule_name, region?) → target configuration
+- get_eventbridge_metrics(rule_name, region?) → execution success rate, errors
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "rule_execution_failure|target_failure|permission_issue|configuration_error|event_pattern_issue|resource_constraint|infrastructure_issue|integration_failure", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}"""
+RULES:
+- Call each tool ONCE
+- Extract facts: rule settings, execution rates, target status
+- Generate hypothesis from observations:
+  - Low execution success rate → rule_execution_failure
+  - Target errors → target_failure
+  - Rule disabled → configuration_error
+- NO speculation
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

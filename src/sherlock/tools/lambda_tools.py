@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_lambda_config(get: str, region: str = None) -> str:
+def get_lambda_config(function_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Lambda function configuration including environment variables and IAM role.
@@ -65,7 +65,7 @@ def get_lambda_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_logs(get: str, region: str = None) -> str:
+def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a Lambda function.
@@ -128,7 +128,7 @@ def get_lambda_logs(get: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_metrics(get: str, region: str = None) -> str:
+def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for a Lambda function.
@@ -192,7 +192,7 @@ def get_lambda_metrics(get: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_layers(get: str, region: str = None) -> str:
+def get_lambda_layers(function_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Lambda function layers information.

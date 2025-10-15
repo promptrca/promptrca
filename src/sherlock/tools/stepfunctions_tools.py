@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_stepfunctions_definition(get: str, region: str = None) -> str:
+def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Step Functions state machine definition.
@@ -62,7 +62,7 @@ def get_stepfunctions_definition(get: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_logs(get: str, region: str = None) -> str:
+def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for a Step Functions state machine.
@@ -129,7 +129,7 @@ def get_stepfunctions_logs(get: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_execution_details(get: str, region: str = None) -> str:
+def get_stepfunctions_execution_details(execution_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get detailed Step Functions execution information including status, input, output, and history.
@@ -186,7 +186,7 @@ def get_stepfunctions_execution_details(get: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_metrics(get: str, region: str = None) -> str:
+def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for a Step Functions state machine.

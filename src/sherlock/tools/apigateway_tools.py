@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_api_gateway_stage_config(get: str, region: str = None) -> str:
+def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get API Gateway stage configuration including integration details (Lambda, Step Functions, etc.).
@@ -114,7 +114,7 @@ def get_api_gateway_stage_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_apigateway_logs(get: str, region: str = None) -> str:
+def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch logs for an API Gateway.
@@ -234,7 +234,7 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
 
 @tool
-def get_api_gateway_metrics(get: str, region: str = None) -> str:
+def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
     Get CloudWatch metrics for an API Gateway.

@@ -34,35 +34,26 @@ from ...tools.vpc_tools import (
 
 def create_vpc_agent(model) -> Agent:
     """Create a VPC specialist agent with tools."""
-    system_prompt = """You are a VPC/Network specialist. Investigate VPC and networking issues quickly and precisely.
-
-PROCESS:
-1) Get VPC configuration
-2) Check subnet and security group configurations
-3) Check network interfaces and gateways
-4) Identify specific issue
+    system_prompt = """You are a VPC specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_vpc_config(vpc_id, region?)
-- get_subnet_config(subnet_id, region?)
-- get_security_group_config(security_group_id, region?)
-- get_network_interface_config(network_interface_id, region?)
-- get_nat_gateway_config(nat_gateway_id, region?)
-- get_internet_gateway_config(igw_id, region?)
+- get_vpc_config(vpc_id, region?) → VPC settings, CIDR blocks
+- get_subnet_config(subnet_id, region?) → subnet settings, availability zone
+- get_security_group_config(security_group_id, region?) → inbound/outbound rules
+- get_network_interface_config(network_interface_id, region?) → interface status
+- get_nat_gateway_config(nat_gateway_id, region?) → NAT gateway status
+- get_internet_gateway_config(igw_id, region?) → IGW status
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "connectivity_issue|security_group_issue|subnet_issue|gateway_issue|permission_issue|configuration_error|resource_constraint|infrastructure_issue|integration_failure", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}"""
+RULES:
+- Call each tool ONCE
+- Extract facts: network configuration, security rules, gateway status
+- Generate hypothesis from observations:
+  - Security group blocks traffic → security_group_issue
+  - Subnet has no route to IGW → connectivity_issue
+  - NAT gateway failed → gateway_issue
+- NO speculation
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

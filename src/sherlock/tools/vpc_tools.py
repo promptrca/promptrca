@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_vpc_config(get: str, region: str = None) -> str:
+def get_vpc_config(vpc_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get VPC configuration and details.
@@ -65,7 +65,7 @@ def get_vpc_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_subnet_config(get: str, region: str = None) -> str:
+def get_subnet_config(subnet_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get subnet configuration and details.
@@ -108,7 +108,7 @@ def get_subnet_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_security_group_config(get: str, region: str = None) -> str:
+def get_security_group_config(security_group_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get security group configuration and rules.
@@ -145,7 +145,7 @@ def get_security_group_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_network_interface_config(get: str, region: str = None) -> str:
+def get_network_interface_config(network_interface_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get network interface (ENI) configuration.
@@ -194,7 +194,7 @@ def get_network_interface_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_nat_gateway_config(get: str, region: str = None) -> str:
+def get_nat_gateway_config(nat_gateway_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get NAT Gateway configuration.
@@ -231,7 +231,7 @@ def get_nat_gateway_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_internet_gateway_config(get: str, region: str = None) -> str:
+def get_internet_gateway_config(igw_id: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get Internet Gateway configuration.

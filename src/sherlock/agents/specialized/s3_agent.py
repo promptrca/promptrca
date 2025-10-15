@@ -32,33 +32,23 @@ from ...tools.s3_tools import (
 
 def create_s3_agent(model) -> Agent:
     """Create an S3 specialist agent with tools."""
-    system_prompt = """You are an S3 specialist. Investigate S3 issues quickly and precisely.
-
-PROCESS:
-1) Get bucket configuration
-2) Check bucket metrics for performance issues
-3) Check bucket policy and permissions
-4) Identify specific issue
+    system_prompt = """You are an S3 specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_s3_bucket_config(bucket_name, region?)
-- get_s3_bucket_metrics(bucket_name, region?)
-- list_s3_bucket_objects(bucket_name, prefix?, max_keys?, region?)
-- get_s3_bucket_policy(bucket_name, region?)
+- get_s3_bucket_config(bucket_name, region?) → versioning, encryption, lifecycle
+- get_s3_bucket_metrics(bucket_name, region?) → request metrics, errors
+- get_s3_bucket_policy(bucket_name, region?) → bucket policy
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "permission_issue|configuration_error|performance_issue|encryption_issue|lifecycle_issue|notification_issue|resource_constraint|infrastructure_issue|integration_failure", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}"""
+RULES:
+- Call each tool ONCE
+- Extract facts: bucket settings, error rates, policy statements
+- Generate hypothesis from observations:
+  - High error rate in metrics → performance_issue
+  - Access denied errors → permission_issue
+  - Encryption errors → encryption_issue
+- NO speculation
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

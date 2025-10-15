@@ -29,30 +29,21 @@ from ...tools.aws_tools import (
 
 def create_iam_agent(model) -> Agent:
     """Create an IAM specialist agent with tools."""
-    system_prompt = """You are an IAM specialist. Investigate IAM permission issues quickly and precisely.
-
-PROCESS:
-1) Get role configuration
-2) Check logs for permission errors
-3) Identify missing permissions
+    system_prompt = """You are an IAM specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_iam_role_config(role_name, region?)
-- get_cloudwatch_logs(log_group, region?)
+- get_iam_role_config(role_name, region?) → trust policy, attached policies, inline policies
+- get_cloudwatch_logs(log_group, region?) → AccessDenied errors
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "permission_issue|configuration_error|integration_failure|timeout|resource_constraint|infrastructure_issue|code_bug", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}"""
+RULES:
+- Call each tool ONCE
+- Extract allowed actions from policy statements
+- If context mentions required action → check if action is in policy
+- If logs show "User X is not authorized to perform Y" → missing permission Y
+- Compare required vs allowed
+- NO speculation about what permissions "should" exist
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

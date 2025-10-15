@@ -162,33 +162,17 @@ class InputParserAgent:
 
     def _ai_extract_resources(self, text: str, region: str, arns: List[str]) -> List[ParsedResource]:
         """Use AI to extract AWS resource names and types from free text."""
-        prompt = f"""Extract AWS resource information from the following text. Only extract EXPLICIT resource names, ARNs, or IDs mentioned in the text.
+        prompt = f"""Extract AWS resource identifiers from text: {text}
 
-DO NOT extract:
-- Generic service names without specific resource identifiers (e.g., "API Gateway" without a specific API name/ID)
-- Common words that happen to match service types
-
-DO extract:
-- Specific resource names (e.g., "payment-processor-lambda", "user-api-gateway")
+EXTRACT ONLY:
+- Resource names (explicit mentions)
 - ARNs
-- Resource IDs (e.g., "abc123xyz" as an API Gateway ID)
+- Resource IDs
 
-Text: {text}
+DO NOT extract generic service names without specific identifiers.
 
-Return a JSON array of resources. Each resource should have:
-- type: AWS service type (lambda, apigateway, stepfunctions, dynamodb, s3, sns, sqs)
-- name: The specific resource name/ID
-- arn: The ARN if available (or null)
-
-If NO specific resources are mentioned (only generic service names), return an empty array [].
-
-Example valid output:
-[
-  {{"type": "lambda", "name": "payment-processor", "arn": null}},
-  {{"type": "apigateway", "name": "abc123xyz", "arn": "arn:aws:execute-api:eu-west-1:123456:abc123xyz"}}
-]
-
-Return only the JSON array, nothing else."""
+OUTPUT: JSON [{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}]
+Return [] if no explicit resources found."""
 
         try:
             agent = Agent(model=self.model)
@@ -236,13 +220,10 @@ Return only the JSON array, nothing else."""
     
     def _ai_extract_errors(self, text: str) -> List[str]:
         """Use AI to extract error messages and issue descriptions."""
-        prompt = f"""Extract error messages or issue descriptions from this text. 
+        prompt = f"""Extract error messages from: {text}
 
-Text: {text}
-
-Return a JSON array of error/issue descriptions. If the entire text describes an issue, include it.
-
-Return only the JSON array, nothing else. Example: ["500 errors when invoking Step Functions", "Permission denied"]"""
+OUTPUT: JSON array of error descriptions
+Example: ["500 errors", "Permission denied"]"""
 
         try:
             agent = Agent(model=self.model)

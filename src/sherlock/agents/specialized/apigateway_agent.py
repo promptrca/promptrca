@@ -33,42 +33,22 @@ from ...tools.aws_tools import (
 def create_apigateway_agent(model) -> Agent:
     """Create an API Gateway specialist agent with tools."""
     
-    system_prompt = """You are an API Gateway specialist. Investigate API Gateway issues quickly and precisely.
-
-CRITICAL RULES:
-- ONLY state facts you can observe from tool calls
-- DO NOT assume what the integration target is (Lambda, Step Functions, etc.) without checking the config
-- DO NOT mention specific services (Lambda, DynamoDB, etc.) unless you see them in the actual integration configuration
-- If you see an integration type in the config, state it explicitly (e.g., "Integration uses StartSyncExecution for Step Functions")
-
-PROCESS:
-1) Get API stage config - this shows the ACTUAL integration target
-2) Check IAM role permissions for the integration
-3) Check logs for errors
+    system_prompt = """You are an API Gateway specialist. Analyze ONLY tool outputs.
 
 TOOLS:
-- get_api_gateway_stage_config(api_id, stage_name, region?) - Shows integration type (Lambda, Step Functions, HTTP, etc.)
-- get_iam_role_config(role_name, region?) - Shows what permissions the integration role has
-- get_cloudwatch_logs(log_group, region?)
+- get_api_gateway_stage_config(api_id, stage, region?) → integration type, IAM role, URI
+- get_iam_role_config(role_name, region?) → permissions
+- get_cloudwatch_logs(log_group, region?) → request/response logs
 
-OUTPUT: Respond with ONLY JSON using this schema:
-{
-  "facts": [
-    {"content": "...", "confidence": 0.0-1.0, "metadata": {}}
-  ],
-  "hypotheses": [
-    {"type": "configuration_error|permission_issue|integration_failure|timeout|resource_constraint|infrastructure_issue|code_bug", "description": "...", "confidence": 0.0-1.0, "evidence": ["..."]}
-  ],
-  "advice": [
-    {"title": "...", "description": "...", "priority": "low|medium|high|critical", "category": "..."}
-  ],
-  "summary": "<= 120 words concise conclusion"
-}
+CRITICAL RULES:
+- Call each tool ONCE
+- State ONLY what you observe in integration config
+- Integration URI shows actual target service (Lambda, Step Functions, HTTP, etc.)
+- DO NOT assume integration target without seeing it in config
+- Extract facts: integration type, credentials role, target service
+- Generate hypothesis only from observed errors in logs
 
-EXAMPLE (Step Functions integration):
-If config shows: "integrationType": "AWS", "uri": "arn:aws:apigateway:region:states:action/StartSyncExecution"
-Then you should say: "API Gateway integrates with Step Functions using StartSyncExecution"
-NOT: "API Gateway integrates with Lambda" (this is wrong!)"""
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

@@ -27,7 +27,7 @@ from ..utils.config import get_region
 
 
 @tool
-def get_iam_role_config(get: str, region: str = None) -> str:
+def get_iam_role_config(role_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get IAM role configuration including trust policy and attached policies.
@@ -86,7 +86,7 @@ def get_iam_role_config(get: str, region: str = None) -> str:
 
 
 @tool
-def get_iam_policy_document(get: str, region: str = None) -> str:
+def get_iam_policy_document(policy_arn: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get IAM policy document details.
@@ -189,7 +189,7 @@ def simulate_iam_policy(simulate: str, region: str = None) -> str:
 
 
 @tool
-def get_iam_user_policies(get: str, region: str = None) -> str:
+def get_iam_user_policies(user_name: str, region: str = None) -> str:
     region = region or get_region()
     """
     Get IAM user policies and permissions.

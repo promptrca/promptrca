@@ -72,7 +72,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             region=region,
             xray_trace_id=xray_trace_id,
             investigation_target=investigation_target,
-            strands_agent=agent
+            strands_agent=bedrock_model
         )
 
         # Run investigation (async)
