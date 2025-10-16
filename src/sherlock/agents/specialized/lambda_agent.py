@@ -40,18 +40,25 @@ TOOLS:
 - get_cloudwatch_logs(log_group, region?) → recent logs, errors, exceptions
 - get_iam_role_config(role_name, region?) → attached policies, permissions
 
-RULES:
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
 - Call each tool ONCE
 - Extract facts: memory allocation, timeout setting, runtime version, error messages from logs
-- Generate hypothesis ONLY if you observe issue in tool output
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
 - Map observations to hypothesis types:
   - Exception/stack trace in logs → code_bug
   - "PermissionDenied" → permission_issue
   - Execution time > configured timeout → timeout
   - Memory usage > allocated → resource_constraint
-- NO speculation
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,

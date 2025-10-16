@@ -107,13 +107,17 @@ class LeadOrchestratorAgent:
         from .root_cause_agent import RootCauseAgent
         from ..clients.aws_client import AWSClient
         from strands import Agent
+        from ..utils.config import create_synthesis_model
         aws_client = AWSClient(region=self.region)
-        # Wrap the model in a Strands Agent
-        strands_agent = Agent(model=model)
+        # Use synthesis model for conservative root cause analysis
+        synthesis_model = create_synthesis_model()
+        strands_agent = Agent(model=synthesis_model)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
+        
         
         # Create the lead orchestrator agent with all specialist tools
         self.lead_agent = self._create_lead_agent()
+    
     
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
@@ -190,18 +194,31 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # 2. Build investigation context
             context = self._build_investigation_context(parsed_inputs)
 
+            # 2.5 ENRICH context by fetching X-Ray traces (NEW)
+            context = await self._enrich_context_with_traces(context)
+
+            # 2.6 Insufficient data check
+            if not context.primary_targets and not context.trace_ids:
+                logger.warning("Insufficient data: no resources or traces identified")
+                return self._create_insufficient_data_report(investigation_id, 
+                    "No AWS resources or trace IDs identified. Cannot investigate.")
+
             # 3. Create investigation prompt for lead agent
             investigation_prompt = self._create_investigation_prompt(context)
+            
+            # Debug: Log the prompt to see what the AI is receiving
+            logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
 
-            # 4. Run lead orchestrator agent
+            # 5. Run lead orchestrator agent
             logger.info("🤖 Running lead orchestrator agent...")
             agent_result = self.lead_agent(investigation_prompt)
             
-            # 5. Parse agent response and extract structured data
+            # 6. Parse agent response and extract structured data
             facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
 
-            # 6. Generate investigation report
+            # 7. Generate investigation report
             report = self._generate_investigation_report(context, facts, hypotheses, advice, region)
+
 
             return report
         
@@ -227,7 +244,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 advice=[],
                 timeline=[],
                 summary=f"Investigation failed: {str(e)}"
-            ).to_dict()
+            )
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
@@ -282,15 +299,85 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             time_range=parsed_inputs.time_range
         )
     
+    async def _enrich_context_with_traces(self, context: InvestigationContext) -> InvestigationContext:
+        """Enrich investigation context by fetching and analyzing X-Ray traces."""
+        try:
+            if not context.trace_ids:
+                return context
+            
+            logger.info(f"📊 Fetching {len(context.trace_ids)} X-Ray traces...")
+            
+            # Import the tool for resource extraction
+            import json
+            from ..tools import get_all_resources_from_trace
+            
+            discovered_resources = []
+            
+            for trace_id in context.trace_ids:
+                try:
+                    # Use the specialized tool to extract ALL resources from trace
+                    resources_json = get_all_resources_from_trace(trace_id, region=self.region)
+                    resources_data = json.loads(resources_json)
+                    
+                    if "error" not in resources_data:
+                        # Convert to ParsedResource objects
+                        for resource in resources_data.get("resources", []):
+                            parsed_resource = ParsedResource(
+                                type=resource.get("type", "unknown"),
+                                name=resource.get("name", "unknown"),
+                                arn=resource.get("arn") or resource.get("name"),
+                                region=self.region,
+                                metadata=resource.get("metadata", {})
+                            )
+                            discovered_resources.append(parsed_resource)
+                            logger.info(f"✅ Discovered {resource.get('type')}: {resource.get('name')}")
+                    else:
+                        logger.warning(f"Failed to extract resources from trace {trace_id}: {resources_data.get('error')}")
+                
+                except Exception as e:
+                    logger.warning(f"Failed to process trace {trace_id}: {e}")
+            
+            # Add discovered resources to primary targets if none were specified
+            if not context.primary_targets and discovered_resources:
+                logger.info(f"🎯 Setting {len(discovered_resources)} discovered resources as primary targets")
+                context.primary_targets.extend(discovered_resources)
+            elif discovered_resources:
+                logger.info(f"📝 Adding {len(discovered_resources)} discovered resources to context")
+                # Add to primary targets without duplicates
+                existing_identifiers = {r.arn for r in context.primary_targets}
+                for resource in discovered_resources:
+                    if resource.arn not in existing_identifiers:
+                        context.primary_targets.append(resource)
+            
+            
+            return context
+            
+        except Exception as e:
+            logger.error(f"Failed to enrich context with traces: {e}")
+            return context
+    
+    
+    
     def _create_investigation_prompt(self, context: InvestigationContext) -> str:
-        """Create investigation prompt for the lead orchestrator agent."""
+        """Create investigation prompt for the lead orchestrator agent"""
         prompt_parts = []
         
-        # Add investigation context
         prompt_parts.append("INVESTIGATION REQUEST:")
         
         if context.trace_ids:
             prompt_parts.append(f"X-Ray Trace ID: {context.trace_ids[0]}")
+            
+            # Add trace data for immediate analysis
+            try:
+                from ..tools import get_xray_trace
+                trace_data = get_xray_trace(context.trace_ids[0], region=self.region)
+                if trace_data and "error" not in trace_data:
+                    prompt_parts.append(f"\nTRACE DATA FOR ANALYSIS:")
+                    prompt_parts.append(f"```json")
+                    prompt_parts.append(trace_data)
+                    prompt_parts.append(f"```")
+            except Exception as e:
+                prompt_parts.append(f"\nNote: Could not retrieve trace data: {e}")
         
         if context.error_messages:
             prompt_parts.append(f"Error: {context.error_messages[0]}")
@@ -298,54 +385,251 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         if context.primary_targets:
             targets_text = ", ".join([f"{t.type}:{t.name}" for t in context.primary_targets])
             prompt_parts.append(f"Target Resources: {targets_text}")
+            
+            # Add specific resource details to prevent hallucination
+            for target in context.primary_targets:
+                if target.type == "apigateway" and target.arn:
+                    # Extract API ID from ARN to prevent hallucination
+                    if "restapis/" in target.arn:
+                        api_id = target.arn.split("restapis/")[1].split("/")[0]
+                        prompt_parts.append(f"  - API Gateway ID: {api_id} (use this exact ID, not 'shp123456')")
+                elif target.type == "lambda_function":
+                    prompt_parts.append(f"  - Lambda Function: {target.name} (only investigate if explicitly listed)")
+        else:
+            prompt_parts.append("\n⚠️ CRITICAL: No AWS resources identified.")
+            prompt_parts.append("DO NOT assume, infer, or hallucinate resource names.")
+            prompt_parts.append("Respond: 'Unable to investigate - no resources found.'\n")
         
         if context.business_context:
             prompt_parts.append(f"Business Context: {context.business_context}")
         
-        # Add investigation instructions
+        
         prompt_parts.append("\nTASK:")
-        prompt_parts.append("Conduct a comprehensive root cause analysis using specialist agents.")
-        prompt_parts.append("Start with X-Ray trace analysis if available, then investigate relevant services.")
-        prompt_parts.append("Synthesize findings from multiple specialists to identify the root cause.")
-        prompt_parts.append("Provide specific, actionable recommendations for remediation.")
+        prompt_parts.append("Conduct root cause analysis by FIRST analyzing trace data, THEN using specialist agents.")
+        
+        prompt_parts.append("\n🔍 CRITICAL TRACE ANALYSIS RULES:")
+        prompt_parts.append("1. ALWAYS start by analyzing the X-Ray trace data to understand the error flow")
+        prompt_parts.append("2. Look for HTTP status codes, fault/error flags, and response content lengths")
+        prompt_parts.append("3. Identify which component actually failed (Lambda 500, API Gateway fault, etc.)")
+        prompt_parts.append("4. Focus investigation on the component that shows the actual error")
+        prompt_parts.append("5. DO NOT assume configuration issues if the trace shows code errors")
+        
+        prompt_parts.append("\n🚨 ANTI-HALLUCINATION RULES:")
+        prompt_parts.append("1. ONLY investigate resources explicitly listed in 'Target Resources' above")
+        prompt_parts.append("2. DO NOT make up, assume, or infer resource names, ARNs, or identifiers")
+        prompt_parts.append("3. DO NOT investigate Lambda functions unless explicitly listed in Target Resources")
+        prompt_parts.append("4. DO NOT investigate Step Functions unless explicitly listed in Target Resources")
+        prompt_parts.append("5. DO NOT use placeholder API IDs like 'shp123456' - use actual IDs from trace data")
+        prompt_parts.append("6. Base analysis ONLY on data returned from tools")
+        prompt_parts.append("7. If tool returns 'ResourceNotFoundException', report as fact")
+        prompt_parts.append("8. If no data available, state 'Insufficient data'")
+        prompt_parts.append("9. If you see 'STEPFUNCTIONS' in trace data, it is NOT a Lambda function")
+        prompt_parts.append("10. If you see 'sherlock-handler' or similar names, DO NOT investigate unless listed in Target Resources")
+        
+        prompt_parts.append("\nWORKFLOW:")
+        prompt_parts.append("1. FIRST: Analyze X-Ray trace data to identify the actual error source")
+        prompt_parts.append("2. SECOND: Call specialist tools for the failing component")
+        prompt_parts.append("3. THIRD: Synthesize findings from trace analysis + tool outputs")
+        prompt_parts.append("4. FOURTH: Provide recommendations based on actual error evidence")
+        
+        prompt_parts.append("\nTRACE ANALYSIS PRINCIPLES:")
+        prompt_parts.append("- Look for HTTP status codes: 500 = server error, 400 = client error, 200 = success")
+        prompt_parts.append("- Check fault/error flags: fault=true indicates a problem, error=true indicates downstream issues")
+        prompt_parts.append("- Follow the error flow: if a service calls another service and gets an error, investigate the called service")
+        prompt_parts.append("- Check response content_length: > 0 means there's an error response body with details")
+        prompt_parts.append("- Look at subsegments: they show the actual service calls and their results")
+        
+        prompt_parts.append("\nEXAMPLE OF CORRECT BEHAVIOR:")
+        prompt_parts.append("- Trace shows Service A calls Service B, Service B returns HTTP 500 → Investigate Service B")
+        prompt_parts.append("- Trace shows Service A fault:true + Service B returns 500 → Root cause is Service B, not Service A config")
+        prompt_parts.append("- Trace shows HTTP 500 + content_length > 0 → Check the error response body for details")
         
         return "\n".join(prompt_parts)
     
     def _parse_agent_response(self, agent_result, context: InvestigationContext) -> (List[Fact], List[Hypothesis], List[Advice]):
-        """Parse the lead agent's response to extract structured data."""
-        # Extract response content
+        """Parse specialist responses and extract structured data."""
         response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
         
-        # For now, create basic facts from the response
-        # In a full implementation, this would parse the agent's structured output
-        facts = []
-        hypotheses = []
-        advice = []
+        all_facts = []
+        all_hypotheses = []
+        all_advice = []
         
-        # Create a fact from the agent's analysis
-        facts.append(Fact(
-            source="lead_orchestrator",
-            content=f"Lead orchestrator analysis: {response[:500]}...",
-            confidence=0.8,
-            metadata={"investigation_type": "multi_agent", "agent_count": 10}
-        ))
+        # 1. Try to extract JSON from code fences first
+        json_blocks = self._extract_json_from_fences(response)
         
-        # Generate hypotheses if none provided
-        if not hypotheses:
+        # 2. If no code fences, search for JSON objects with brace balancing
+        if not json_blocks:
+            json_blocks = self._extract_json_with_brace_balancer(response)
+        
+        # 3. Parse each JSON block
+        for data in json_blocks:
+            if not isinstance(data, dict):
+                continue
+                
+            # Parse facts into Fact objects
+            for fact_data in data.get('facts', []):
+                if isinstance(fact_data, str):
+                    all_facts.append(Fact(
+                        source='specialist', 
+                        content=fact_data, 
+                        confidence=0.8,
+                        metadata={"parsing_method": "string_fact"}
+                    ))
+                elif isinstance(fact_data, dict):
+                    all_facts.append(Fact(
+                        source=fact_data.get('source', 'specialist'),
+                        content=fact_data.get('content', ''),
+                        confidence=fact_data.get('confidence', 0.8),
+                        metadata=fact_data.get('metadata', {})
+                    ))
+            
+            # Parse hypotheses into Hypothesis objects
+            for hyp_data in data.get('hypotheses', []):
+                if isinstance(hyp_data, dict):
+                    all_hypotheses.append(Hypothesis(
+                        type=hyp_data.get('type', 'unknown'),
+                        description=hyp_data.get('description', ''),
+                        confidence=hyp_data.get('confidence', 0.5),
+                        evidence=hyp_data.get('evidence', [])
+                    ))
+            
+            # Parse advice into Advice objects
+            for advice_data in data.get('advice', []):
+                if isinstance(advice_data, dict):
+                    all_advice.append(Advice(
+                        title=advice_data.get('title', ''),
+                        description=advice_data.get('description', ''),
+                        priority=advice_data.get('priority', 'medium'),
+                        category=advice_data.get('category', 'general')
+                    ))
+        
+        # Fallback: create low-confidence fact only if nothing structured found
+        if not all_facts and not all_hypotheses and not all_advice:
+            all_facts.append(Fact(
+                source="lead_orchestrator",
+                content=f"Orchestrator summary: {response[:500]}",
+                confidence=0.5,
+                metadata={"investigation_type": "multi_agent", "fallback": True}
+            ))
+        
+        
+        # Generate additional hypotheses if none provided from specialists
+        if not all_hypotheses:
             from .hypothesis_agent import HypothesisAgent
             from strands import Agent
-            # Wrap the model in a Strands Agent
-            strands_agent = Agent(model=self.model)
+            # Use synthesis model for lower temperature
+            from ..utils.config import create_synthesis_model
+            synthesis_model = create_synthesis_model()
+            strands_agent = Agent(model=synthesis_model)
             hypothesis_agent = HypothesisAgent(strands_agent=strands_agent)
-            hypotheses = hypothesis_agent.generate_hypotheses(facts)
+            all_hypotheses = hypothesis_agent.generate_hypotheses(all_facts)
         
-        # Generate advice if none provided
-        if not advice and hypotheses:
+        # Generate additional advice if none provided from specialists
+        if not all_advice and all_hypotheses:
             from .advice_agent import AdviceAgent
             advice_agent = AdviceAgent()
-            advice = advice_agent.generate_advice(facts, hypotheses)
+            all_advice = advice_agent.generate_advice(all_facts, all_hypotheses)
         
-        return facts, hypotheses, advice
+        return all_facts, all_hypotheses, all_advice
+    
+    def _extract_json_from_fences(self, response: str) -> List[dict]:
+        """Extract and parse JSON from markdown code blocks."""
+        import json
+        import re
+        
+        json_blocks = []
+        
+        # Look for ```json ... ``` blocks
+        json_fence_pattern = r'```json\s*\n(.*?)\n```'
+        matches = re.findall(json_fence_pattern, response, re.DOTALL)
+        
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                json_blocks.append(data)
+            except json.JSONDecodeError:
+                continue
+        
+        # Also look for ``` ... ``` blocks (without json specifier)
+        fence_pattern = r'```\s*\n(.*?)\n```'
+        matches = re.findall(fence_pattern, response, re.DOTALL)
+        
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                # Only include if it looks like our expected structure
+                if isinstance(data, dict) and any(key in data for key in ['facts', 'hypotheses', 'advice']):
+                    json_blocks.append(data)
+            except json.JSONDecodeError:
+                continue
+        
+        return json_blocks
+    
+    def _extract_json_with_brace_balancer(self, response: str) -> List[dict]:
+        """Find JSON objects containing facts/hypotheses/advice using brace counting."""
+        import json
+        import re
+        
+        json_blocks = []
+        
+        # Find potential JSON objects by looking for opening braces
+        brace_positions = []
+        for i, char in enumerate(response):
+            if char == '{':
+                brace_positions.append(i)
+        
+        for start_pos in brace_positions:
+            # Use brace balancing to find the end of the JSON object
+            brace_count = 0
+            end_pos = start_pos
+            
+            for i in range(start_pos, len(response)):
+                if response[i] == '{':
+                    brace_count += 1
+                elif response[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_pos = i
+                        break
+            
+            if brace_count == 0:  # Found balanced braces
+                json_str = response[start_pos:end_pos + 1]
+                try:
+                    data = json.loads(json_str)
+                    # Only include if it has our expected structure
+                    if isinstance(data, dict) and any(key in data for key in ['facts', 'hypotheses', 'advice']):
+                        json_blocks.append(data)
+                except json.JSONDecodeError:
+                    continue
+        
+        return json_blocks
+    
+    def _create_insufficient_data_report(self, investigation_id: str, reason: str) -> InvestigationReport:
+        """Create a report when there's insufficient data to investigate."""
+        from ..models.base import InvestigationReport
+        from datetime import datetime, timezone
+        
+        now = datetime.now(timezone.utc)
+        
+        return InvestigationReport(
+            run_id=investigation_id,
+            status="insufficient_data",
+            started_at=now,
+            completed_at=now,
+            duration_seconds=0.0,
+            affected_resources=[],
+            severity_assessment=None,
+            facts=[],
+            root_cause_analysis=None,
+            hypotheses=[],
+            advice=[],
+            timeline=[],
+            summary=json.dumps({
+                "investigation_type": "insufficient_data",
+                "reason": reason,
+                "status": "aborted"
+            })
+        )
     
     def _generate_investigation_report(self, context: InvestigationContext, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], region: str) -> InvestigationReport:
         """Generate investigation report from multi-agent findings."""
@@ -448,3 +732,65 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             ))
         
         return timeline
+    
+    
+    
+    async def _get_trace_data(self, trace_id: str) -> Optional[Dict[str, Any]]:
+        """Get X-Ray trace data using the xray tool."""
+        try:
+            import json
+            from ..tools import get_xray_trace
+            
+            # Call the actual X-Ray trace tool
+            trace_json = get_xray_trace(trace_id, region=self.region)
+            trace_data = json.loads(trace_json)
+            
+            # Debug: Log the full trace data structure
+            logger.info(f"DEBUG: Full trace data for {trace_id}: {json.dumps(trace_data, indent=2)}")
+            
+            # Check for errors
+            if "error" in trace_data:
+                logger.warning(f"Failed to fetch trace {trace_id}: {trace_data['error']}")
+                return None
+            
+            return trace_data
+        except Exception as e:
+            logger.error(f"Error fetching trace {trace_id}: {e}")
+            return None
+    
+    async def _get_log_data(self, resource_name: str, resource_type: str) -> Optional[List[Dict[str, Any]]]:
+        """Get log data for resource using CloudWatch logs tool."""
+        try:
+            import json
+            from ..tools import get_cloudwatch_logs
+            
+            log_group_map = {
+                "lambda": f"/aws/lambda/{resource_name}",
+                "apigateway": f"/aws/apigateway/{resource_name}",
+                "stepfunctions": f"/aws/states/{resource_name}",
+                "xray_trace": None,  # X-Ray traces don't have log groups
+                "trace": None,  # Alternative name for traces
+                "unknown": None  # Skip unknown types
+            }
+            
+            log_group = log_group_map.get(resource_type.lower())
+            if not log_group:
+                if resource_type.lower() in ["xray_trace", "trace", "unknown"]:
+                    logger.info(f"Skipping log extraction for {resource_type} - no log group available")
+                    return None
+                else:
+                    logger.warning(f"Unknown resource type for logs: {resource_type}")
+                    return None
+            
+            logs_json = get_cloudwatch_logs(log_group, hours_back=1, region=self.region)
+            logs_data = json.loads(logs_json)
+            
+            if "error" in logs_data:
+                logger.warning(f"Failed to fetch logs for {resource_name}: {logs_data['error']}")
+                return None
+            
+            return logs_data.get("events", [])
+            
+        except Exception as e:
+            logger.error(f"Error fetching logs for {resource_name}: {e}")
+            return None

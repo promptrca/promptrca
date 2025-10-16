@@ -75,15 +75,37 @@ def get_bedrock_model_config() -> Dict[str, Any]:
     return config
 
 
-def create_bedrock_model() -> BedrockModel:
+def create_bedrock_model(temperature_override: Optional[float] = None) -> BedrockModel:
     """
     Create a BedrockModel instance with environment-based configuration.
+    
+    Args:
+        temperature_override: Optional temperature to override the default
     
     Returns:
         BedrockModel: Configured Bedrock model instance
     """
     config = get_bedrock_model_config()
+    if temperature_override is not None:
+        config["temperature"] = temperature_override
     return BedrockModel(**config)
+
+
+def create_synthesis_model() -> BedrockModel:
+    """
+    Create a model for synthesis with lower temperature.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model with lower temperature for synthesis
+    """
+    synthesis_temp = float(os.getenv("SHERLOCK_SYNTHESIS_TEMPERATURE", "0.2"))
+    return create_bedrock_model(temperature_override=synthesis_temp)
+
+
+
+
+
+
 
 
 def get_environment_info() -> Dict[str, str]:
@@ -99,5 +121,5 @@ def get_environment_info() -> Dict[str, str]:
         "temperature": os.getenv("SHERLOCK_TEMPERATURE", "0.7"),
         "max_tokens": os.getenv("SHERLOCK_MAX_TOKENS", "not set"),
         "aws_region": os.getenv("AWS_REGION", "not set"),
-        "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set")
+        "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set"),
     }

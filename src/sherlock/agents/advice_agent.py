@@ -20,7 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
-from typing import List
+from typing import List, Optional
 from ..models import Fact, Hypothesis, Advice
 
 
@@ -109,4 +109,6 @@ class AdviceAgent:
                 category="monitoring"
             ))
         
+        
         return advice
+    

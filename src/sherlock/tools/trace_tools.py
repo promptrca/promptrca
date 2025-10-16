@@ -328,10 +328,21 @@ def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
                     stage = parts[1] if len(parts) > 1 else 'unknown'
                     key = f"{api_id}:{stage}"
                     if key not in discovered:
+                        # Extract ARN from segment document if available
+                        arn = None
+                        if 'resource_arn' in segment_doc:
+                            arn = segment_doc['resource_arn']
+                        elif 'aws' in segment_doc and 'api_gateway' in segment_doc['aws']:
+                            # Construct ARN from API Gateway data
+                            aws_data = segment_doc['aws']['api_gateway']
+                            rest_api_id = aws_data.get('rest_api_id', api_id)
+                            arn = f"arn:aws:apigateway:{region}::/restapis/{rest_api_id}/stages/{stage}"
+                        
                         resource = {
                             "type": "apigateway",
                             "name": api_id,
                             "stage": stage,
+                            "arn": arn,
                             "segment_id": segment.get('Id')
                         }
                         discovered.add(key)

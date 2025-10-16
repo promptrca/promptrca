@@ -1,0 +1,60 @@
+services:
+  sherlock-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: sherlock-server
+    environment:
+      - AWS_REGION=${AWS_REGION:-eu-west-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
+      - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
+    ports:
+      - "8080:8080"
+    networks:
+      - sherlock-network
+    volumes:
+      - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+  sherlock-lambda:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sherlock-lambda
+    environment:
+      - AWS_REGION=${AWS_REGION:-eu-west-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
+      - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
+    ports:
+      - "9000:8080"  # Lambda Runtime Interface Emulator port
+    networks:
+      - sherlock-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/2015-03-31/functions/function/invocations", "-X", "POST", "-d", "{}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+networks:
+  sherlock-network:
+    driver: bridge

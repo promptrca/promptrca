@@ -90,17 +90,21 @@ class RootCauseAgent:
         # Sample key facts for context
         sample_facts = [f.content for f in facts[:5]]
 
+        hypotheses_list = []
+        for i, h in enumerate(hypothesis_data):
+            hypotheses_list.append(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f})")
+        
         prompt = f"""Select PRIMARY root cause from hypotheses (already sorted by confidence).
 
 HYPOTHESES:
-{chr(10).join(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f})" for i, h in enumerate(hypothesis_data))}
+{chr(10).join(hypotheses_list)}
 
 RULES:
 - Primary = highest confidence hypothesis that explains the incident
 - Contributing factors = other high-confidence hypotheses
 - Summary: 1-2 sentences explaining selection
 
-OUTPUT: JSON {"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "analysis_summary": "..."}"""
+OUTPUT: JSON {{"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "analysis_summary": "..."}}"""
 
         try:
             # Use Strands agent

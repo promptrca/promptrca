@@ -46,7 +46,8 @@ class HypothesisAgent:
         # Try AI-powered hypothesis generation first
         if self.strands_agent:
             try:
-                return self._generate_hypotheses_with_ai(facts)
+                base_hypotheses = self._generate_hypotheses_with_ai(facts)
+                return base_hypotheses
             except Exception as e:
                 logger.error(f"AI hypothesis generation failed: {e}, falling back to heuristics")
                 return self._generate_hypotheses_heuristic(facts)
@@ -80,7 +81,7 @@ RULES:
 - Do NOT invent scenarios not in facts
 - Rank by confidence (highest first)
 
-OUTPUT: JSON [{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}]"""
+OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}}]"""
 
         try:
             # Use Strands agent to generate hypotheses (call agent directly)
@@ -91,14 +92,19 @@ OUTPUT: JSON [{"type": "...", "description": "...", "confidence": 0.0-1.0, "evid
             # Parse response
             hypotheses_data = self._parse_ai_response(response)
 
-            # Convert to Hypothesis objects
+            # Convert to Hypothesis objects with evidence validation
             hypotheses = []
             for h_data in hypotheses_data:
+                evidence = h_data.get('evidence', [])
+                if not evidence or len(evidence) == 0:
+                    logger.warning(f"Dropping hypothesis without evidence: {h_data.get('description')}")
+                    continue
+                
                 hypothesis = Hypothesis(
                     type=h_data.get('type', 'unknown'),
                     description=h_data.get('description', ''),
                     confidence=float(h_data.get('confidence', 0.5)),
-                    evidence=h_data.get('evidence', [])
+                    evidence=evidence
                 )
                 hypotheses.append(hypothesis)
 
@@ -202,3 +208,4 @@ OUTPUT: JSON [{"type": "...", "description": "...", "confidence": 0.0-1.0, "evid
 
         logger.info(f"✅ Generated {len(hypotheses)} heuristic hypotheses")
         return hypotheses
+    
