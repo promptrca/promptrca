@@ -24,7 +24,6 @@ import json
 from typing import List, Optional
 from ..models import Fact, Hypothesis
 from ..utils import get_logger
-from ..memory import MemoryResult
 
 logger = get_logger(__name__)
 
@@ -36,8 +35,8 @@ class HypothesisAgent:
         """Initialize the hypothesis agent."""
         self.strands_agent = strands_agent
     
-    def generate_hypotheses(self, facts: List[Fact], memory_results: Optional[List[MemoryResult]] = None) -> List[Hypothesis]:
-        """Generate hypotheses from facts using AI or fallback to heuristics, with optional memory enhancement."""
+    def generate_hypotheses(self, facts: List[Fact]) -> List[Hypothesis]:
+        """Generate hypotheses from facts using AI or fallback to heuristics."""
         if not facts:
             logger.warning("No facts provided for hypothesis generation")
             return []
@@ -48,22 +47,13 @@ class HypothesisAgent:
         if self.strands_agent:
             try:
                 base_hypotheses = self._generate_hypotheses_with_ai(facts)
-                # Enhance with memory if available
-                if memory_results:
-                    return self._enhance_hypotheses_with_memory(base_hypotheses, memory_results)
                 return base_hypotheses
             except Exception as e:
                 logger.error(f"AI hypothesis generation failed: {e}, falling back to heuristics")
-                base_hypotheses = self._generate_hypotheses_heuristic(facts)
-                if memory_results:
-                    return self._enhance_hypotheses_with_memory(base_hypotheses, memory_results)
-                return base_hypotheses
+                return self._generate_hypotheses_heuristic(facts)
         else:
             logger.warning("No Strands agent available, using heuristic approach")
-            base_hypotheses = self._generate_hypotheses_heuristic(facts)
-            if memory_results:
-                return self._enhance_hypotheses_with_memory(base_hypotheses, memory_results)
-            return base_hypotheses
+            return self._generate_hypotheses_heuristic(facts)
 
     def _generate_hypotheses_with_ai(self, facts: List[Fact]) -> List[Hypothesis]:
         """Generate hypotheses using Strands AI agent."""
@@ -219,24 +209,3 @@ OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evi
         logger.info(f"✅ Generated {len(hypotheses)} heuristic hypotheses")
         return hypotheses
     
-    def _enhance_hypotheses_with_memory(self, base_hypotheses: List[Hypothesis], memory_results: List[MemoryResult]) -> List[Hypothesis]:
-        """Enhance hypotheses with memory-based confidence boosting"""
-        if not memory_results:
-            return base_hypotheses
-        
-        # Extract common root causes from memory
-        memory_root_causes = {}
-        for mem in memory_results:
-            if mem.outcome == "resolved":
-                memory_root_causes[mem.error_type] = memory_root_causes.get(mem.error_type, 0) + 1
-        
-        # Boost confidence for hypotheses that match historical patterns
-        for hyp in base_hypotheses:
-            if hyp.type in memory_root_causes:
-                boost = min(0.15, memory_root_causes[hyp.type] * 0.05)  # Max 0.15 boost
-                hyp.confidence = min(1.0, hyp.confidence + boost)
-                hyp.evidence.append(
-                    f"Similar pattern resolved {memory_root_causes[hyp.type]} times in past investigations"
-                )
-        
-        return sorted(base_hypotheses, key=lambda h: h.confidence, reverse=True)

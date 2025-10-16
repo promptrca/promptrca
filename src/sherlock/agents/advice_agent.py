@@ -22,7 +22,6 @@ Contact: christiangenn99+sherlock@gmail.com
 
 from typing import List, Optional
 from ..models import Fact, Hypothesis, Advice
-from ..memory import MemoryResult
 
 
 class AdviceAgent:
@@ -32,8 +31,8 @@ class AdviceAgent:
         """Initialize the advice agent."""
         pass
     
-    def generate_advice(self, facts: List[Fact], hypotheses: List[Hypothesis], memory_results: Optional[List[MemoryResult]] = None) -> List[Advice]:
-        """Generate actionable advice based on facts and hypotheses, with optional memory enhancement."""
+    def generate_advice(self, facts: List[Fact], hypotheses: List[Hypothesis]) -> List[Advice]:
+        """Generate actionable advice based on facts and hypotheses."""
         # Cost tracking removed
         
         advice = []
@@ -110,37 +109,6 @@ class AdviceAgent:
                 category="monitoring"
             ))
         
-        # Enhance advice with memory if available
-        if memory_results:
-            advice = self._prioritize_advice_with_memory(advice, memory_results)
         
         return advice
     
-    def _prioritize_advice_with_memory(self, advice: List[Advice], memory_results: List[MemoryResult]) -> List[Advice]:
-        """Reorder advice based on historical effectiveness"""
-        if not memory_results:
-            return advice
-        
-        # Track which advice worked in similar cases
-        advice_effectiveness = {}
-        for mem in memory_results:
-            if mem.outcome == "resolved":
-                advice_effectiveness[mem.advice_summary] = advice_effectiveness.get(mem.advice_summary, 0) + 1
-        
-        # Boost priority for proven advice
-        for adv in advice:
-            for proven_advice, count in advice_effectiveness.items():
-                if self._is_similar_advice(adv.description, proven_advice):
-                    # Upgrade priority if it worked multiple times
-                    if count >= 3 and adv.priority != "critical":
-                        adv.priority = "high"
-                    adv.description += f"\n\n✓ This approach resolved {count} similar issues in the past."
-        
-        return advice
-    
-    def _is_similar_advice(self, adv1: str, adv2: str) -> bool:
-        """Check if two pieces of advice are similar (simple keyword matching)"""
-        keywords1 = set(adv1.lower().split())
-        keywords2 = set(adv2.lower().split())
-        overlap = len(keywords1 & keywords2)
-        return overlap > max(len(keywords1), len(keywords2)) * 0.5

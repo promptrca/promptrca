@@ -30,10 +30,7 @@ from dataclasses import dataclass, field
 from strands import Agent, tool
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
-from ..utils.config import get_region, get_memory_config
-from ..memory import MemoryClient, MemoryResult
-from ..memory.graph_builder import GraphBuilder
-from ..memory.models import GraphNode, GraphEdge, ObservabilityPointer, ConfigSnapshot, Incident, Pattern
+from ..utils.config import get_region
 from ..agents.input_parser_agent import ParsedInputs, ParsedResource
 from ..agents.specialized.lambda_agent import create_lambda_agent, create_lambda_agent_tool
 from ..agents.specialized.apigateway_agent import create_apigateway_agent, create_apigateway_agent_tool
@@ -117,39 +114,10 @@ class LeadOrchestratorAgent:
         strands_agent = Agent(model=synthesis_model)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
         
-        # Initialize memory client (connectivity test deferred)
-        memory_config = get_memory_config()
-        self.memory_enabled = False
-        if memory_config["enabled"]:
-            self.memory_client = MemoryClient(memory_config)
-            logger.info("Memory client initialized - connectivity will be tested on first use")
-        else:
-            self.memory_client = None
-            logger.info("Memory system disabled in configuration")
-        
-        # Initialize graph builder
-        # TODO: Get real account ID from AWS STS or configuration
-        self.graph_builder = GraphBuilder(account_id="123456789012", region=self.region)
         
         # Create the lead orchestrator agent with all specialist tools
         self.lead_agent = self._create_lead_agent()
     
-    async def _test_memory_connectivity(self):
-        """Test memory client connectivity and enable/disable accordingly."""
-        if not self.memory_client:
-            return
-        
-        try:
-            is_connected = await self.memory_client.test_connectivity()
-            if is_connected:
-                self.memory_enabled = True
-                logger.info("Memory system connected and enabled")
-            else:
-                self.memory_enabled = False
-                logger.warning("Memory system connectivity test failed - disabled")
-        except Exception as e:
-            self.memory_enabled = False
-            logger.warning(f"Memory system disabled due to test failure: {e}")
     
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
@@ -235,11 +203,8 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 return self._create_insufficient_data_report(investigation_id, 
                     "No AWS resources or trace IDs identified. Cannot investigate.")
 
-            # 3. Query memory if available (NEW)
-            memory_context = await self._get_memory_context(context)
-
-            # 4. Create investigation prompt for lead agent (enhanced with memory)
-            investigation_prompt = self._create_investigation_prompt(context, memory_context)
+            # 3. Create investigation prompt for lead agent
+            investigation_prompt = self._create_investigation_prompt(context)
             
             # Debug: Log the prompt to see what the AI is receiving
             logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
@@ -249,13 +214,11 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             agent_result = self.lead_agent(investigation_prompt)
             
             # 6. Parse agent response and extract structured data
-            facts, hypotheses, advice = self._parse_agent_response(agent_result, context, memory_context)
+            facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
 
             # 7. Generate investigation report
             report = self._generate_investigation_report(context, facts, hypotheses, advice, region)
 
-            # 8. Build knowledge graph from investigation artifacts (NEW)
-            await self._build_knowledge_graph(context, facts, report, region)
 
             return report
         
@@ -386,19 +349,6 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                     if resource.arn not in existing_identifiers:
                         context.primary_targets.append(resource)
             
-            # Early pointer ingestion for trace_id → ARN resolution
-            if self.memory_client and context.trace_ids:
-                for trace_id in context.trace_ids:
-                    try:
-                        trace_data = await self._get_trace_data(trace_id)
-                        if trace_data:
-                            nodes, edges, pointers = self.graph_builder.extract_from_trace(trace_data)
-                            # Upsert pointers only (nodes/edges handled later in _build_knowledge_graph)
-                            for pointer in pointers:
-                                await self.memory_client.upsert_pointer(pointer)
-                            logger.debug(f"Upserted {len(pointers)} pointers from trace {trace_id}")
-                    except Exception as e:
-                        logger.warning(f"Failed to upsert pointers from trace {trace_id}: {e}")
             
             return context
             
@@ -406,89 +356,9 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             logger.error(f"Failed to enrich context with traces: {e}")
             return context
     
-    async def _get_memory_context(self, context: InvestigationContext) -> Optional[str]:
-        """Query memory using RAG and format context for prompt - topology only"""
-        # Memory disabled for now
-        return None
-        
-        # Test connectivity on first use if not already tested
-        if not hasattr(self, '_memory_connectivity_tested'):
-            await self._test_memory_connectivity()
-            self._memory_connectivity_tested = True
-        
-        if not self.memory_enabled:
-            return None
-        
-        try:
-            # Build ordered seed list: trace_ids → ARNs → names
-            seeds = []
-            if context.trace_ids:
-                seeds.extend(context.trace_ids)
-            for target in context.primary_targets:
-                if target.arn:
-                    seeds.append(target.arn)
-            for target in context.primary_targets:
-                seeds.append(target.name)
-            
-            # Try first 3 seeds max to avoid latency spikes
-            rag_result = None
-            for seed in seeds[:3]:
-                try:
-                    rag_result = await self.memory_client.retrieve_context(seed, k_hop=2)
-                    if rag_result and rag_result.subgraph:
-                        logger.info(f"Memory context from seed: {seed}")
-                        break
-                except Exception as e:
-                    logger.warning(f"Memory retrieval failed for seed {seed}: {e}")
-                    continue
-            
-            if not rag_result or not rag_result.subgraph:
-                return None
-            
-            # Only use topology information (nodes and edges)
-            subgraph = rag_result.subgraph
-            if not subgraph.get('nodes') and not subgraph.get('edges'):
-                return None
-            
-            # Format topology context for prompt
-            memory_context = "HISTORICAL TOPOLOGY HINTS (validate with live tools)\n\n"
-            
-            # Add subgraph info (nodes only) - filter unknowns
-            if subgraph.get('nodes'):
-                nodes_to_show = [n for n in subgraph['nodes'] if n.get('type') != 'unknown'][:5]
-                memory_context += f"KNOWN RESOURCES ({len(nodes_to_show)}):\n"
-                for node in nodes_to_show:
-                    memory_context += f"- {node.get('type', 'unknown')}: {node.get('name', 'unknown')}\n"
-                memory_context += "\n"
-            
-            # Add relationships (edges only) - prefer X-Ray + high confidence
-            if subgraph.get('edges'):
-                edges = subgraph['edges']
-                # Prefer X-Ray evidence with high confidence
-                edges_pref = [e for e in edges 
-                             if 'X_RAY' in e.get('evidence_sources', []) 
-                             and e.get('confidence', 0) >= 0.7]
-                edges_fallback = [e for e in edges if e not in edges_pref]
-                edges_to_show = (edges_pref + edges_fallback)[:5]
-                
-                memory_context += f"RESOURCE RELATIONSHIPS ({len(edges_to_show)}):\n"
-                for edge in edges_to_show:
-                    from_name = edge.get('from_arn', '').split(':')[-1]
-                    to_name = edge.get('to_arn', '').split(':')[-1]
-                    memory_context += f"- {from_name} {edge.get('rel', '')} {to_name} (confidence: {edge.get('confidence', 0):.2f})\n"
-                memory_context += "\n"
-            
-            # Add disclaimer
-            memory_context += "Use as hints only. Base conclusions on the current trace and tools.\n"
-            
-            return memory_context
-            
-        except Exception as e:
-            logger.warning(f"Memory topology query failed: {e}")
-            return None
     
     
-    def _create_investigation_prompt(self, context: InvestigationContext, memory_context: Optional[str] = None) -> str:
+    def _create_investigation_prompt(self, context: InvestigationContext) -> str:
         """Create investigation prompt for the lead orchestrator agent"""
         prompt_parts = []
         
@@ -533,8 +403,6 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         if context.business_context:
             prompt_parts.append(f"Business Context: {context.business_context}")
         
-        if memory_context:
-            prompt_parts.append(memory_context)
         
         prompt_parts.append("\nTASK:")
         prompt_parts.append("Conduct root cause analysis by FIRST analyzing trace data, THEN using specialist agents.")
@@ -578,7 +446,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         
         return "\n".join(prompt_parts)
     
-    def _parse_agent_response(self, agent_result, context: InvestigationContext, memory_context: Optional[str] = None) -> (List[Fact], List[Hypothesis], List[Advice]):
+    def _parse_agent_response(self, agent_result, context: InvestigationContext) -> (List[Fact], List[Hypothesis], List[Advice]):
         """Parse specialist responses and extract structured data."""
         response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
         
@@ -644,10 +512,6 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 metadata={"investigation_type": "multi_agent", "fallback": True}
             ))
         
-        # Extract memory results if available
-        memory_results = None
-        if memory_context and self.memory_client:
-            memory_results = []  # For now, we'll pass empty list
         
         # Generate additional hypotheses if none provided from specialists
         if not all_hypotheses:
@@ -658,13 +522,13 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             synthesis_model = create_synthesis_model()
             strands_agent = Agent(model=synthesis_model)
             hypothesis_agent = HypothesisAgent(strands_agent=strands_agent)
-            all_hypotheses = hypothesis_agent.generate_hypotheses(all_facts, memory_results)
+            all_hypotheses = hypothesis_agent.generate_hypotheses(all_facts)
         
         # Generate additional advice if none provided from specialists
         if not all_advice and all_hypotheses:
             from .advice_agent import AdviceAgent
             advice_agent = AdviceAgent()
-            all_advice = advice_agent.generate_advice(all_facts, all_hypotheses, memory_results)
+            all_advice = advice_agent.generate_advice(all_facts, all_hypotheses)
         
         return all_facts, all_hypotheses, all_advice
     
@@ -869,58 +733,6 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         
         return timeline
     
-    async def _build_knowledge_graph(self, context: InvestigationContext, facts: List[Fact], report: InvestigationReport, region: str) -> None:
-        """Build knowledge graph from investigation artifacts."""
-        if not self.memory_client:
-            return
-        
-        try:
-            logger.info("🏗️ Building knowledge graph from investigation artifacts...")
-            
-            # Extract nodes and edges from X-Ray traces
-            all_nodes = []
-            all_edges = []
-            all_pointers = []
-            
-            for trace_id in context.trace_ids:
-                try:
-                    # Get trace data (this would need to be implemented)
-                    trace_data = await self._get_trace_data(trace_id)
-                    if trace_data:
-                        nodes, edges, pointers = self.graph_builder.extract_from_trace(trace_data)
-                        all_nodes.extend(nodes)
-                        all_edges.extend(edges)
-                        all_pointers.extend(pointers)
-                except Exception as e:
-                    logger.warning(f"Failed to extract from trace {trace_id}: {e}")
-            
-            # Extract edges from logs for primary targets
-            for target in context.primary_targets:
-                try:
-                    # Get log data (this would need to be implemented)
-                    log_data = await self._get_log_data(target.name, target.type)
-                    if log_data:
-                        edges = self.graph_builder.extract_from_logs(log_data, target.name)
-                        all_edges.extend(edges)
-                except Exception as e:
-                    logger.warning(f"Failed to extract from logs for {target.name}: {e}")
-            
-            # Save nodes to memory
-            for node in all_nodes:
-                await self.memory_client.upsert_node(node)
-            
-            # Save edges to memory
-            for edge in all_edges:
-                await self.memory_client.upsert_edge(edge)
-            
-            # Save pointers to memory
-            for pointer in all_pointers:
-                await self.memory_client.upsert_pointer(pointer)
-            
-            logger.info(f"✅ Knowledge graph updated: {len(all_nodes)} nodes, {len(all_edges)} edges")
-            
-        except Exception as e:
-            logger.error(f"Failed to build knowledge graph: {e}")
     
     
     async def _get_trace_data(self, trace_id: str) -> Optional[Dict[str, Any]]:

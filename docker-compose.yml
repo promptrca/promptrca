@@ -1,30 +1,4 @@
 services:
-  opensearch:
-    image: opensearchproject/opensearch:2.11.0
-    container_name: sherlock-opensearch
-    environment:
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "DISABLE_INSTALL_DEMO_CONFIG=true"
-      - "DISABLE_SECURITY_PLUGIN=true"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - "9200:9200"
-      - "9600:9600"
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
-    networks:
-      - sherlock-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
   sherlock-server:
     build:
       context: .
@@ -35,18 +9,12 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
-      - SHERLOCK_MEMORY_ENABLED=false
-      - SHERLOCK_MEMORY_ENDPOINT=http://opensearch:9200
-      - SHERLOCK_BEDROCK_EMBEDDING_MODEL=${SHERLOCK_BEDROCK_EMBEDDING_MODEL:-amazon.titan-embed-text-v2:0}
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
       - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
     ports:
       - "8080:8080"
     networks:
       - sherlock-network
-    depends_on:
-      opensearch:
-        condition: service_healthy
     volumes:
       - ~/.aws:/root/.aws:ro  # Optional: mount AWS credentials
       - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
@@ -66,18 +34,12 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
-      - SHERLOCK_MEMORY_ENABLED=false
-      - SHERLOCK_MEMORY_ENDPOINT=http://opensearch:9200
-      - SHERLOCK_BEDROCK_EMBEDDING_MODEL=${SHERLOCK_BEDROCK_EMBEDDING_MODEL:-amazon.titan-embed-text-v2:0}
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
       - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
     ports:
       - "9000:8080"  # Lambda Runtime Interface Emulator port
     networks:
       - sherlock-network
-    depends_on:
-      opensearch:
-        condition: service_healthy
     volumes:
       - ~/.aws:/root/.aws:ro  # Optional: mount AWS credentials
     healthcheck:
@@ -85,10 +47,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-volumes:
-  opensearch-data:
-    driver: local
 
 networks:
   sherlock-network:

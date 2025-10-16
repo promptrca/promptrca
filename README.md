@@ -10,7 +10,7 @@ This directory contains the reorganized Sherlock core package with service-speci
 cp .env.example .env
 # Edit .env with your AWS credentials
 
-# Start all services (OpenSearch + Sherlock HTTP server + Lambda container)
+# Start all services (Sherlock HTTP server + Lambda container)
 docker-compose up -d
 
 # Check service status
@@ -63,13 +63,7 @@ make stop
 
 The docker-compose setup includes three services:
 
-### 1. OpenSearch (`opensearch`)
-- **Image**: `opensearchproject/opensearch:2.11.0`
-- **Port**: `9200` (HTTP), `9600` (Performance Analyzer)
-- **Purpose**: Memory storage for agent knowledge and past investigations
-- **Health Check**: Cluster health endpoint
-
-### 2. Sherlock HTTP Server (`sherlock-server`)
+### 1. Sherlock HTTP Server (`sherlock-server`)
 - **Dockerfile**: `Dockerfile.server` (optimized for HTTP server)
 - **Base Image**: `python:3.13-slim`
 - **Port**: `8080`
@@ -77,10 +71,10 @@ The docker-compose setup includes three services:
 - **Endpoints**:
   - `POST /invocations` - Investigation requests
   - `GET /health` - Health check
-  - `GET /status` - Detailed status with OpenSearch connectivity
+  - `GET /status` - Detailed status
   - `GET /ping` - Built-in AgentCore ping
 
-### 3. Sherlock Lambda (`sherlock-lambda`)
+### 2. Sherlock Lambda (`sherlock-lambda`)
 - **Dockerfile**: `Dockerfile` (AWS Lambda runtime)
 - **Base Image**: `public.ecr.aws/lambda/python:3.13`
 - **Port**: `9000` (Lambda Runtime Interface Emulator)
@@ -141,7 +135,7 @@ The project includes two specialized Dockerfiles:
 # Health check
 curl http://localhost:8080/health
 
-# Detailed status (includes OpenSearch connectivity)
+# Detailed status
 curl http://localhost:8080/status
 
 # Investigation request
@@ -166,14 +160,6 @@ curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
   -H "Content-Type: application/json"
 ```
 
-### OpenSearch Testing
-```bash
-# Check OpenSearch health
-curl http://localhost:9200/_cluster/health
-
-# List indices
-curl http://localhost:9200/_cat/indices
-```
 
 ## AWS Credentials
 
@@ -221,62 +207,6 @@ Region detection follows this priority:
 2. `AWS_DEFAULT_REGION` (fallback)
 3. `eu-west-1` (default)
 
-### Memory System Configuration (Optional)
-
-Sherlock can query an external memory system to retrieve similar past investigations and improve accuracy through RAG (Retrieval-Augmented Generation).
-
-#### Environment Variables
-
-- `SHERLOCK_MEMORY_ENABLED` - Enable/disable memory system (default: "false")
-- `SHERLOCK_MEMORY_ENDPOINT` - Memory API endpoint URL (OpenSearch-compatible)
-- `SHERLOCK_MEMORY_AUTH_TYPE` - Authentication type: "api_key" or "aws_sigv4" (default: "api_key")
-- `SHERLOCK_MEMORY_API_KEY` - API key for authentication (if using api_key auth)
-- `SHERLOCK_MEMORY_MAX_RESULTS` - Maximum similar investigations to retrieve (default: 5)
-- `SHERLOCK_MEMORY_MIN_QUALITY` - Minimum quality score threshold (default: 0.7)
-- `SHERLOCK_MEMORY_TIMEOUT_MS` - Query timeout in milliseconds (default: 2000)
-- `SHERLOCK_MEMORY_EDGE_MAX_AGE` - How far back to look for edges (default: 48h)
-- `SHERLOCK_MEMORY_MIN_EDGE_CONFIDENCE` - Minimum confidence threshold for edges (default: 0.6)
-
-#### Example Configuration
-
-```bash
-# Enable memory system
-export SHERLOCK_MEMORY_ENABLED=true
-
-# Configure memory endpoint
-export SHERLOCK_MEMORY_ENDPOINT=https://memory-api.company.com
-
-# Set authentication
-export SHERLOCK_MEMORY_AUTH_TYPE=api_key
-export SHERLOCK_MEMORY_API_KEY=your-api-key-here
-
-# Optional: Adjust query parameters
-export SHERLOCK_MEMORY_MAX_RESULTS=5
-export SHERLOCK_MEMORY_MIN_QUALITY=0.7
-```
-
-#### How It Works
-
-When enabled, Sherlock:
-1. Queries the external memory API for similar past investigations
-2. Uses hybrid search (semantic + keyword matching) to find relevant cases
-3. Injects **topology-only context** (resource relationships) into investigation prompts
-4. Boosts hypothesis confidence based on past patterns
-5. Prioritizes advice that has been proven effective
-
-**Note**: Memory context provides topology hints only - conclusions must be based on live tools and current trace data.
-
-The memory system is **optional** and gracefully degrades if unavailable. Investigations continue normally without memory if:
-- Memory is disabled (`SHERLOCK_MEMORY_ENABLED=false`)
-- Memory endpoint is not configured
-- Memory query fails or times out
-- No similar investigations are found
-
-#### Benefits
-
-- **30-40% improvement** in root cause accuracy when memory is available
-- **Faster resolution** by learning from past successful investigations
-- **Better advice** prioritized by historical effectiveness
 - **Zero impact** when disabled - investigations work normally
 
 ### Example Configuration

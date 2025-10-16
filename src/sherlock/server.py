@@ -30,7 +30,7 @@ from bedrock_agentcore import BedrockAgentCoreApp
 from starlette.responses import JSONResponse
 
 from .handlers import handle_investigation, get_region
-from .utils.config import get_environment_info, get_memory_config, DEFAULT_REGION
+from .utils.config import get_environment_info, DEFAULT_REGION
 
 # AgentCore setup
 app = BedrockAgentCoreApp()
@@ -63,36 +63,19 @@ async def health(request):
 app.add_route("/health", health, methods=["GET"])
 
 
-# Status endpoint with OpenSearch connectivity check
+# Status endpoint
 async def status(request):
-    """Status endpoint with detailed service information and OpenSearch connectivity."""
+    """Status endpoint with detailed service information."""
     try:
         # Get environment info
         env_info = get_environment_info()
         
-        # Check OpenSearch connectivity if memory is enabled
-        opensearch_status = "disabled"
-        if env_info.get("memory_enabled") == "true":
-            try:
-                from .memory.client import MemoryClient
-                memory_config = get_memory_config()
-                if memory_config["enabled"] and memory_config["endpoint"]:
-                    # Try to connect to OpenSearch
-                    client = MemoryClient(memory_config)
-                    # Test connectivity
-                    is_connected = await client.test_connectivity()
-                    opensearch_status = "connected" if is_connected else "connection_failed"
-                else:
-                    opensearch_status = "not_configured"
-            except Exception as e:
-                opensearch_status = f"error: {str(e)}"
         
         return JSONResponse({
             "status": "healthy",
             "service": "sherlock-agentcore",
             "version": "1.0.0",
             "environment": env_info,
-            "opensearch": opensearch_status,
             "endpoints": {
                 "investigations": "/invocations",
                 "health": "/health",
