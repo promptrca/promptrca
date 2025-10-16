@@ -110,9 +110,11 @@ class LeadOrchestratorAgent:
         from .root_cause_agent import RootCauseAgent
         from ..clients.aws_client import AWSClient
         from strands import Agent
+        from ..utils.config import create_synthesis_model
         aws_client = AWSClient(region=self.region)
-        # Wrap the model in a Strands Agent
-        strands_agent = Agent(model=model)
+        # Use synthesis model for conservative root cause analysis
+        synthesis_model = create_synthesis_model()
+        strands_agent = Agent(model=synthesis_model)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
         
         # Initialize memory client (connectivity test deferred)
@@ -279,7 +281,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 advice=[],
                 timeline=[],
                 summary=f"Investigation failed: {str(e)}"
-            ).to_dict()
+            )
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
@@ -763,7 +765,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 "reason": reason,
                 "status": "aborted"
             })
-        ).to_dict()
+        )
     
     def _generate_investigation_report(self, context: InvestigationContext, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], region: str) -> InvestigationReport:
         """Generate investigation report from multi-agent findings."""
