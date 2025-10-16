@@ -16,13 +16,17 @@ services:
     networks:
       - sherlock-network
     volumes:
-      - ~/.aws:/root/.aws:ro  # Optional: mount AWS credentials
       - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
 
   sherlock-lambda:
     build:
@@ -40,13 +44,16 @@ services:
       - "9000:8080"  # Lambda Runtime Interface Emulator port
     networks:
       - sherlock-network
-    volumes:
-      - ~/.aws:/root/.aws:ro  # Optional: mount AWS credentials
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/2015-03-31/functions/function/invocations", "-X", "POST", "-d", "{}"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
 
 networks:
   sherlock-network:

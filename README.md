@@ -143,10 +143,6 @@ curl -X POST http://localhost:8080/invocations \
   -H 'Content-Type: application/json' \
   -d '{"free_text_input": "My Lambda function is failing with timeout errors"}'
 
-# Legacy structured input
-curl -X POST http://localhost:8080/invocations \
-  -H 'Content-Type: application/json' \
-  -d '{"function_name": "test-function", "region": "eu-west-1"}'
 ```
 
 ### Lambda Container Testing
