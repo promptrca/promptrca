@@ -112,7 +112,15 @@ class InputParserAgent:
         arns = re.findall(self.arn_pattern, text)
         
         # Use AI to intelligently extract AWS resources
-        primary_targets = self._ai_extract_resources(text, region, arns)
+        ai_extracted_resources = self._ai_extract_resources(text, region, arns)
+        
+        # Validate each extracted resource
+        primary_targets = []
+        for resource in ai_extracted_resources:
+            if self._validate_resource(resource, region):
+                primary_targets.append(resource)
+            else:
+                logger.warning(f"Discarding invalid resource: {resource.type}:{resource.name}")
         
         # Extract error messages and context with AI
         error_messages = self._ai_extract_errors(text)
@@ -217,6 +225,27 @@ Return [] if no explicit resources found."""
                         metadata={"arn": arn}
                     ))
             return resources
+    
+    def _validate_resource(self, resource: ParsedResource, region: str) -> bool:
+        """Validate resource exists via lightweight AWS check."""
+        try:
+            if resource.type == "lambda_function":
+                from ..tools import get_lambda_config
+                config = get_lambda_config(resource.name, region)
+                return "error" not in config.lower()
+            elif resource.type == "apigateway":
+                if resource.arn and "restapis/" in resource.arn:
+                    api_id = resource.arn.split("restapis/")[1].split("/")[0]
+                    return len(api_id) == 10 and api_id.isalnum()
+            elif resource.type == "stepfunctions":
+                # Validate ARN format for Step Functions
+                if resource.arn:
+                    return resource.arn.startswith("arn:aws:states:") and "stateMachine" in resource.arn
+            # Default: accept if no validator defined
+            return True
+        except Exception as e:
+            logger.debug(f"Validation failed for {resource.name}: {e}")
+            return False
     
     def _ai_extract_errors(self, text: str) -> List[str]:
         """Use AI to extract error messages and issue descriptions."""

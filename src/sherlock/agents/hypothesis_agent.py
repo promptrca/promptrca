@@ -102,14 +102,19 @@ OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evi
             # Parse response
             hypotheses_data = self._parse_ai_response(response)
 
-            # Convert to Hypothesis objects
+            # Convert to Hypothesis objects with evidence validation
             hypotheses = []
             for h_data in hypotheses_data:
+                evidence = h_data.get('evidence', [])
+                if not evidence or len(evidence) == 0:
+                    logger.warning(f"Dropping hypothesis without evidence: {h_data.get('description')}")
+                    continue
+                
                 hypothesis = Hypothesis(
                     type=h_data.get('type', 'unknown'),
                     description=h_data.get('description', ''),
                     confidence=float(h_data.get('confidence', 0.5)),
-                    evidence=h_data.get('evidence', [])
+                    evidence=evidence
                 )
                 hypotheses.append(hypothesis)
 

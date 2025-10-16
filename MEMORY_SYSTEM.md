@@ -89,6 +89,10 @@ SHERLOCK_MEMORY_API_KEY=your-api-key-here
 SHERLOCK_MEMORY_MAX_RESULTS=5       # Max similar investigations to retrieve
 SHERLOCK_MEMORY_MIN_QUALITY=0.7     # Only use high-quality past investigations
 SHERLOCK_MEMORY_TIMEOUT_MS=2000     # Timeout for memory queries
+
+# Edge recency and confidence filters (reduce bias)
+SHERLOCK_MEMORY_EDGE_MAX_AGE=48h          # How far back to look for edges
+SHERLOCK_MEMORY_MIN_EDGE_CONFIDENCE=0.6    # Minimum confidence threshold
 ```
 
 ## How It Works
@@ -96,10 +100,11 @@ SHERLOCK_MEMORY_TIMEOUT_MS=2000     # Timeout for memory queries
 ### 1. Memory Query
 
 When an investigation starts, Sherlock:
-1. Extracts error message and resource information
-2. Queries the external memory API using hybrid search
-3. Retrieves up to 5 similar past investigations
-4. Filters by quality score (minimum 0.7)
+1. **Multi-seed fallback**: Tries trace_ids → ARNs → names (max 3 seeds)
+2. **Early pointer ingestion**: Upserts pointers from traces for better trace_id → ARN resolution
+3. Queries the external memory API using hybrid search with configurable edge filters
+4. Retrieves topology context (nodes and edges only, no past RCAs)
+5. Filters by quality score and edge confidence thresholds
 
 ### 2. Result Reranking
 
@@ -111,32 +116,28 @@ Results are reranked based on:
 
 ### 3. Prompt Enhancement
 
-Similar investigations are formatted and injected into the investigation prompt:
+**Topology-only context** is injected into the investigation prompt (no past RCAs or advice):
 
 ```
-==============================================================
-RELEVANT PAST INVESTIGATIONS (from memory system)
-==============================================================
+HISTORICAL TOPOLOGY HINTS (validate with live tools)
 
-1. Investigation #inv-8234 (similarity: 0.95)
-   Resource: lambda:payment-processor
-   Root Cause: Lambda timeout due to DynamoDB connection pool exhaustion
-   Solution: Increased connection pool size from 10 to 50
-   Outcome: ✓ RESOLVED (quality: 0.92)
-   Date: 2025-01-13T14:30:00Z
+KNOWN RESOURCES (3):
+- lambda: payment-processor
+- dynamodb: user-sessions
+- apigateway: api-gateway-123
 
-2. Investigation #inv-7891 (similarity: 0.82)
-   ...
+RESOURCE RELATIONSHIPS (2):
+- payment-processor CALLS user-sessions (confidence: 0.85)
+- api-gateway-123 TRIGGERS payment-processor (confidence: 0.92)
 
-LEARNED PATTERNS:
-- timeout is the most common root cause (3/5 cases)
-- Successfully resolved 3 times with: Increased connection pool size
-
-==============================================================
-Use the above historical context to inform your investigation.
-Prioritize solutions that have been proven effective.
-==============================================================
+Use as hints only. Base conclusions on the current trace and tools.
 ```
+
+**Key Features**:
+- **Multi-seed fallback**: Tries trace_ids → ARNs → names (max 3 seeds)
+- **X-Ray preference**: Prioritizes edges with X-Ray evidence and high confidence
+- **Unknown filtering**: Excludes nodes with type "unknown"
+- **Topology-only**: No past root cause summaries or advice injected
 
 ### 4. Graceful Degradation
 

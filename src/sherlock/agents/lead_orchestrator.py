@@ -227,6 +227,12 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # 2.5 ENRICH context by fetching X-Ray traces (NEW)
             context = await self._enrich_context_with_traces(context)
 
+            # 2.6 Insufficient data check
+            if not context.primary_targets and not context.trace_ids:
+                logger.warning("Insufficient data: no resources or traces identified")
+                return self._create_insufficient_data_report(investigation_id, 
+                    "No AWS resources or trace IDs identified. Cannot investigate.")
+
             # 3. Query memory if available (NEW)
             memory_context = await self._get_memory_context(context)
 
@@ -378,6 +384,20 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                     if resource.arn not in existing_identifiers:
                         context.primary_targets.append(resource)
             
+            # Early pointer ingestion for trace_id → ARN resolution
+            if self.memory_client and context.trace_ids:
+                for trace_id in context.trace_ids:
+                    try:
+                        trace_data = await self._get_trace_data(trace_id)
+                        if trace_data:
+                            nodes, edges, pointers = self.graph_builder.extract_from_trace(trace_data)
+                            # Upsert pointers only (nodes/edges handled later in _build_knowledge_graph)
+                            for pointer in pointers:
+                                await self.memory_client.upsert_pointer(pointer)
+                            logger.debug(f"Upserted {len(pointers)} pointers from trace {trace_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to upsert pointers from trace {trace_id}: {e}")
+            
             return context
             
         except Exception as e:
@@ -386,8 +406,8 @@ OUTPUT: Relay specialist findings without additional interpretation"""
     
     async def _get_memory_context(self, context: InvestigationContext) -> Optional[str]:
         """Query memory using RAG and format context for prompt - topology only"""
-        if not self.memory_client or not context.primary_targets:
-            return None
+        # Memory disabled for now
+        return None
         
         # Test connectivity on first use if not already tested
         if not hasattr(self, '_memory_connectivity_tested'):
@@ -398,13 +418,27 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             return None
         
         try:
-            # Use primary target as seed for RAG retrieval
-            seed = context.primary_targets[0].name
+            # Build ordered seed list: trace_ids → ARNs → names
+            seeds = []
             if context.trace_ids:
-                seed = context.trace_ids[0]  # Prefer trace ID if available
+                seeds.extend(context.trace_ids)
+            for target in context.primary_targets:
+                if target.arn:
+                    seeds.append(target.arn)
+            for target in context.primary_targets:
+                seeds.append(target.name)
             
-            # Retrieve context using new RAG system
-            rag_result = await self.memory_client.retrieve_context(seed, k_hop=2)
+            # Try first 3 seeds max to avoid latency spikes
+            rag_result = None
+            for seed in seeds[:3]:
+                try:
+                    rag_result = await self.memory_client.retrieve_context(seed, k_hop=2)
+                    if rag_result and rag_result.subgraph:
+                        logger.info(f"Memory context from seed: {seed}")
+                        break
+                except Exception as e:
+                    logger.warning(f"Memory retrieval failed for seed {seed}: {e}")
+                    continue
             
             if not rag_result or not rag_result.subgraph:
                 return None
@@ -415,23 +449,35 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 return None
             
             # Format topology context for prompt
-            memory_context = "DISCOVERED TOPOLOGY CONTEXT:\n\n"
+            memory_context = "HISTORICAL TOPOLOGY HINTS (validate with live tools)\n\n"
             
-            # Add subgraph info (nodes only)
+            # Add subgraph info (nodes only) - filter unknowns
             if subgraph.get('nodes'):
-                memory_context += f"KNOWN RESOURCES ({len(subgraph['nodes'])}):\n"
-                for node in subgraph['nodes'][:5]:  # Limit to 5 nodes
+                nodes_to_show = [n for n in subgraph['nodes'] if n.get('type') != 'unknown'][:5]
+                memory_context += f"KNOWN RESOURCES ({len(nodes_to_show)}):\n"
+                for node in nodes_to_show:
                     memory_context += f"- {node.get('type', 'unknown')}: {node.get('name', 'unknown')}\n"
                 memory_context += "\n"
             
-            # Add relationships (edges only)
+            # Add relationships (edges only) - prefer X-Ray + high confidence
             if subgraph.get('edges'):
-                memory_context += f"RESOURCE RELATIONSHIPS ({len(subgraph['edges'])}):\n"
-                for edge in subgraph['edges'][:5]:  # Limit to 5 edges
+                edges = subgraph['edges']
+                # Prefer X-Ray evidence with high confidence
+                edges_pref = [e for e in edges 
+                             if 'X_RAY' in e.get('evidence_sources', []) 
+                             and e.get('confidence', 0) >= 0.7]
+                edges_fallback = [e for e in edges if e not in edges_pref]
+                edges_to_show = (edges_pref + edges_fallback)[:5]
+                
+                memory_context += f"RESOURCE RELATIONSHIPS ({len(edges_to_show)}):\n"
+                for edge in edges_to_show:
                     from_name = edge.get('from_arn', '').split(':')[-1]
                     to_name = edge.get('to_arn', '').split(':')[-1]
                     memory_context += f"- {from_name} {edge.get('rel', '')} {to_name} (confidence: {edge.get('confidence', 0):.2f})\n"
                 memory_context += "\n"
+            
+            # Add disclaimer
+            memory_context += "Use as hints only. Base conclusions on the current trace and tools.\n"
             
             return memory_context
             
@@ -531,47 +577,193 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         return "\n".join(prompt_parts)
     
     def _parse_agent_response(self, agent_result, context: InvestigationContext, memory_context: Optional[str] = None) -> (List[Fact], List[Hypothesis], List[Advice]):
-        """Parse the lead agent's response to extract structured data."""
-        # Extract response content
+        """Parse specialist responses and extract structured data."""
         response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
         
-        # For now, create basic facts from the response
-        # In a full implementation, this would parse the agent's structured output
-        facts = []
-        hypotheses = []
-        advice = []
+        all_facts = []
+        all_hypotheses = []
+        all_advice = []
         
-        # Create a fact from the agent's analysis
-        facts.append(Fact(
-            source="lead_orchestrator",
-            content=f"Lead orchestrator analysis: {response[:500]}...",
-            confidence=0.8,
-            metadata={"investigation_type": "multi_agent", "agent_count": 10}
-        ))
+        # 1. Try to extract JSON from code fences first
+        json_blocks = self._extract_json_from_fences(response)
+        
+        # 2. If no code fences, search for JSON objects with brace balancing
+        if not json_blocks:
+            json_blocks = self._extract_json_with_brace_balancer(response)
+        
+        # 3. Parse each JSON block
+        for data in json_blocks:
+            if not isinstance(data, dict):
+                continue
+                
+            # Parse facts into Fact objects
+            for fact_data in data.get('facts', []):
+                if isinstance(fact_data, str):
+                    all_facts.append(Fact(
+                        source='specialist', 
+                        content=fact_data, 
+                        confidence=0.8,
+                        metadata={"parsing_method": "string_fact"}
+                    ))
+                elif isinstance(fact_data, dict):
+                    all_facts.append(Fact(
+                        source=fact_data.get('source', 'specialist'),
+                        content=fact_data.get('content', ''),
+                        confidence=fact_data.get('confidence', 0.8),
+                        metadata=fact_data.get('metadata', {})
+                    ))
+            
+            # Parse hypotheses into Hypothesis objects
+            for hyp_data in data.get('hypotheses', []):
+                if isinstance(hyp_data, dict):
+                    all_hypotheses.append(Hypothesis(
+                        type=hyp_data.get('type', 'unknown'),
+                        description=hyp_data.get('description', ''),
+                        confidence=hyp_data.get('confidence', 0.5),
+                        evidence=hyp_data.get('evidence', [])
+                    ))
+            
+            # Parse advice into Advice objects
+            for advice_data in data.get('advice', []):
+                if isinstance(advice_data, dict):
+                    all_advice.append(Advice(
+                        title=advice_data.get('title', ''),
+                        description=advice_data.get('description', ''),
+                        priority=advice_data.get('priority', 'medium'),
+                        category=advice_data.get('category', 'general')
+                    ))
+        
+        # Fallback: create low-confidence fact only if nothing structured found
+        if not all_facts and not all_hypotheses and not all_advice:
+            all_facts.append(Fact(
+                source="lead_orchestrator",
+                content=f"Orchestrator summary: {response[:500]}",
+                confidence=0.5,
+                metadata={"investigation_type": "multi_agent", "fallback": True}
+            ))
         
         # Extract memory results if available
         memory_results = None
         if memory_context and self.memory_client:
-            # Try to extract memory results from the context
-            # This is a simplified approach - in practice, you'd want to store the actual MemoryResult objects
             memory_results = []  # For now, we'll pass empty list
         
-        # Generate hypotheses if none provided
-        if not hypotheses:
+        # Generate additional hypotheses if none provided from specialists
+        if not all_hypotheses:
             from .hypothesis_agent import HypothesisAgent
             from strands import Agent
-            # Wrap the model in a Strands Agent
-            strands_agent = Agent(model=self.model)
+            # Use synthesis model for lower temperature
+            from ..utils.config import create_synthesis_model
+            synthesis_model = create_synthesis_model()
+            strands_agent = Agent(model=synthesis_model)
             hypothesis_agent = HypothesisAgent(strands_agent=strands_agent)
-            hypotheses = hypothesis_agent.generate_hypotheses(facts, memory_results)
+            all_hypotheses = hypothesis_agent.generate_hypotheses(all_facts, memory_results)
         
-        # Generate advice if none provided
-        if not advice and hypotheses:
+        # Generate additional advice if none provided from specialists
+        if not all_advice and all_hypotheses:
             from .advice_agent import AdviceAgent
             advice_agent = AdviceAgent()
-            advice = advice_agent.generate_advice(facts, hypotheses, memory_results)
+            all_advice = advice_agent.generate_advice(all_facts, all_hypotheses, memory_results)
         
-        return facts, hypotheses, advice
+        return all_facts, all_hypotheses, all_advice
+    
+    def _extract_json_from_fences(self, response: str) -> List[dict]:
+        """Extract and parse JSON from markdown code blocks."""
+        import json
+        import re
+        
+        json_blocks = []
+        
+        # Look for ```json ... ``` blocks
+        json_fence_pattern = r'```json\s*\n(.*?)\n```'
+        matches = re.findall(json_fence_pattern, response, re.DOTALL)
+        
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                json_blocks.append(data)
+            except json.JSONDecodeError:
+                continue
+        
+        # Also look for ``` ... ``` blocks (without json specifier)
+        fence_pattern = r'```\s*\n(.*?)\n```'
+        matches = re.findall(fence_pattern, response, re.DOTALL)
+        
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                # Only include if it looks like our expected structure
+                if isinstance(data, dict) and any(key in data for key in ['facts', 'hypotheses', 'advice']):
+                    json_blocks.append(data)
+            except json.JSONDecodeError:
+                continue
+        
+        return json_blocks
+    
+    def _extract_json_with_brace_balancer(self, response: str) -> List[dict]:
+        """Find JSON objects containing facts/hypotheses/advice using brace counting."""
+        import json
+        import re
+        
+        json_blocks = []
+        
+        # Find potential JSON objects by looking for opening braces
+        brace_positions = []
+        for i, char in enumerate(response):
+            if char == '{':
+                brace_positions.append(i)
+        
+        for start_pos in brace_positions:
+            # Use brace balancing to find the end of the JSON object
+            brace_count = 0
+            end_pos = start_pos
+            
+            for i in range(start_pos, len(response)):
+                if response[i] == '{':
+                    brace_count += 1
+                elif response[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_pos = i
+                        break
+            
+            if brace_count == 0:  # Found balanced braces
+                json_str = response[start_pos:end_pos + 1]
+                try:
+                    data = json.loads(json_str)
+                    # Only include if it has our expected structure
+                    if isinstance(data, dict) and any(key in data for key in ['facts', 'hypotheses', 'advice']):
+                        json_blocks.append(data)
+                except json.JSONDecodeError:
+                    continue
+        
+        return json_blocks
+    
+    def _create_insufficient_data_report(self, investigation_id: str, reason: str) -> InvestigationReport:
+        """Create a report when there's insufficient data to investigate."""
+        from ..models.base import InvestigationReport
+        from datetime import datetime, timezone
+        
+        now = datetime.now(timezone.utc)
+        
+        return InvestigationReport(
+            run_id=investigation_id,
+            status="insufficient_data",
+            started_at=now,
+            completed_at=now,
+            duration_seconds=0.0,
+            affected_resources=[],
+            severity_assessment=None,
+            facts=[],
+            root_cause_analysis=None,
+            hypotheses=[],
+            advice=[],
+            timeline=[],
+            summary=json.dumps({
+                "investigation_type": "insufficient_data",
+                "reason": reason,
+                "status": "aborted"
+            })
+        ).to_dict()
     
     def _generate_investigation_report(self, context: InvestigationContext, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], region: str) -> InvestigationReport:
         """Generate investigation report from multi-agent findings."""

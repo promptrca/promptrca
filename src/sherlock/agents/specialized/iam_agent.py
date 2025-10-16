@@ -35,15 +35,23 @@ TOOLS:
 - get_iam_role_config(role_name, region?) → trust policy, attached policies, inline policies
 - get_cloudwatch_logs(log_group, region?) → AccessDenied errors
 
-RULES:
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
 - Call each tool ONCE
 - Extract allowed actions from policy statements
 - If context mentions required action → check if action is in policy
 - If logs show "User X is not authorized to perform Y" → missing permission Y
 - Compare required vs allowed
-- NO speculation about what permissions "should" exist
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,

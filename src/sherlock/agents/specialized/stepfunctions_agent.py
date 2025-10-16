@@ -38,18 +38,26 @@ TOOLS:
 - get_iam_role_config(role_name, region?) → permissions
 - get_cloudwatch_logs(log_group, region?) → execution logs
 
-RULES:
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
 - Call each tool ONCE
 - From definition: extract states, identify task ARNs (which services are invoked)
 - State ONLY services you see in task Resource ARNs
 - Check if IAM role has permissions for actions in definition
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
 - Map log errors to hypotheses:
   - "AccessDeniedException" → permission_issue
   - "States.TaskFailed" → integration_failure
   - Missing resource in definition → configuration_error
-- NO assumptions
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,

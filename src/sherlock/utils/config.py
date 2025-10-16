@@ -75,15 +75,31 @@ def get_bedrock_model_config() -> Dict[str, Any]:
     return config
 
 
-def create_bedrock_model() -> BedrockModel:
+def create_bedrock_model(temperature_override: Optional[float] = None) -> BedrockModel:
     """
     Create a BedrockModel instance with environment-based configuration.
+    
+    Args:
+        temperature_override: Optional temperature to override the default
     
     Returns:
         BedrockModel: Configured Bedrock model instance
     """
     config = get_bedrock_model_config()
+    if temperature_override is not None:
+        config["temperature"] = temperature_override
     return BedrockModel(**config)
+
+
+def create_synthesis_model() -> BedrockModel:
+    """
+    Create a model for synthesis with lower temperature.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model with lower temperature for synthesis
+    """
+    synthesis_temp = float(os.getenv("SHERLOCK_SYNTHESIS_TEMPERATURE", "0.2"))
+    return create_bedrock_model(temperature_override=synthesis_temp)
 
 
 def get_memory_config() -> Dict[str, Any]:
@@ -100,7 +116,9 @@ def get_memory_config() -> Dict[str, Any]:
         "api_key": os.getenv("SHERLOCK_MEMORY_API_KEY", ""),
         "max_results": int(os.getenv("SHERLOCK_MEMORY_MAX_RESULTS", "5")),
         "min_quality": float(os.getenv("SHERLOCK_MEMORY_MIN_QUALITY", "0.7")),
-        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000"))
+        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000")),
+        "edge_max_age": os.getenv("SHERLOCK_MEMORY_EDGE_MAX_AGE", "48h"),
+        "edge_min_confidence": float(os.getenv("SHERLOCK_MEMORY_MIN_EDGE_CONFIDENCE", "0.6"))
     }
 
 
@@ -118,7 +136,9 @@ def get_opensearch_config() -> Dict[str, Any]:
         "api_key": os.getenv("SHERLOCK_MEMORY_API_KEY", ""),
         "max_results": int(os.getenv("SHERLOCK_MEMORY_MAX_RESULTS", "5")),
         "min_quality": float(os.getenv("SHERLOCK_MEMORY_MIN_QUALITY", "0.7")),
-        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000"))
+        "timeout_ms": int(os.getenv("SHERLOCK_MEMORY_TIMEOUT_MS", "2000")),
+        "edge_max_age": os.getenv("SHERLOCK_MEMORY_EDGE_MAX_AGE", "48h"),
+        "edge_min_confidence": float(os.getenv("SHERLOCK_MEMORY_MIN_EDGE_CONFIDENCE", "0.6"))
     }
 
 

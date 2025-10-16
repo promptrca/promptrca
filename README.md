@@ -234,6 +234,8 @@ Sherlock can query an external memory system to retrieve similar past investigat
 - `SHERLOCK_MEMORY_MAX_RESULTS` - Maximum similar investigations to retrieve (default: 5)
 - `SHERLOCK_MEMORY_MIN_QUALITY` - Minimum quality score threshold (default: 0.7)
 - `SHERLOCK_MEMORY_TIMEOUT_MS` - Query timeout in milliseconds (default: 2000)
+- `SHERLOCK_MEMORY_EDGE_MAX_AGE` - How far back to look for edges (default: 48h)
+- `SHERLOCK_MEMORY_MIN_EDGE_CONFIDENCE` - Minimum confidence threshold for edges (default: 0.6)
 
 #### Example Configuration
 
@@ -258,9 +260,11 @@ export SHERLOCK_MEMORY_MIN_QUALITY=0.7
 When enabled, Sherlock:
 1. Queries the external memory API for similar past investigations
 2. Uses hybrid search (semantic + keyword matching) to find relevant cases
-3. Injects historical context into investigation prompts
+3. Injects **topology-only context** (resource relationships) into investigation prompts
 4. Boosts hypothesis confidence based on past patterns
 5. Prioritizes advice that has been proven effective
+
+**Note**: Memory context provides topology hints only - conclusions must be based on live tools and current trace data.
 
 The memory system is **optional** and gracefully degrades if unavailable. Investigations continue normally without memory if:
 - Memory is disabled (`SHERLOCK_MEMORY_ENABLED=false`)

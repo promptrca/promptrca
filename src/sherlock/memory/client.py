@@ -47,6 +47,8 @@ class MemoryClient:
         self.max_results = config.get("max_results", 5)
         self.min_quality = config.get("min_quality", 0.7)
         self.timeout_ms = config.get("timeout_ms", 2000)
+        self.edge_max_age = config.get("edge_max_age", "48h")
+        self.edge_min_confidence = config.get("edge_min_confidence", 0.6)
         
         if not self.enabled or not self.endpoint:
             logger.info("Memory system not configured - memory retrieval disabled")
@@ -542,11 +544,11 @@ class MemoryClient:
             query = {
                 "size": 1,
                 "query": {
-                    "term": {"traces.last_trace_ids": seed}
+                    "term": {"traces.last_trace_ids.keyword": seed}
                 }
             }
             
-            response = await self._query_opensearch("rca-pointers", query)
+            response = await self._query_opensearch("rca-pointers/_search", query)
             hits = response.get('hits', {}).get('hits', [])
             
             if hits:
@@ -601,20 +603,34 @@ class MemoryClient:
         try:
             field = "from_arn" if direction == "out" else "to_arn"
             
+            # Query edges by resource ARN and confidence, without time filtering
+            # The memory system should find historical relationships regardless of when they were created
+            # Use wildcard queries since the field might not be indexed for exact matching
+            should_queries = []
+            for arn in arns:
+                # Extract a unique identifier from the ARN for wildcard matching
+                arn_parts = arn.split(':')
+                if len(arn_parts) >= 2:
+                    # Use the last part of the ARN as the wildcard pattern
+                    unique_id = arn_parts[-1]
+                    should_queries.append({"wildcard": {field: f"*{unique_id}*"}})
+                else:
+                    # Fallback to full ARN wildcard
+                    should_queries.append({"wildcard": {field: f"*{arn}*"}})
+            
             query = {
                 "size": 200,
                 "query": {
                     "bool": {
                         "filter": [
-                            {"terms": {field: arns}},
-                            {"range": {"last_seen": {"gte": "now-48h"}}},
-                            {"range": {"confidence": {"gte": 0.6}}}
+                            {"bool": {"should": should_queries}},
+                            {"range": {"confidence": {"gte": self.edge_min_confidence}}}
                         ]
                     }
                 }
             }
             
-            response = await self._query_opensearch("rca-edges", query)
+            response = await self._query_opensearch("rca-edges/_search", query)
             hits = response.get('hits', {}).get('hits', [])
             
             return [hit['_source'] for hit in hits]
@@ -669,7 +685,7 @@ class MemoryClient:
                 "query": {"term": {"arn": arn}}
             }
             
-            response = await self._query_opensearch("rca-configs", query)
+            response = await self._query_opensearch("rca-configs/_search", query)
             hits = response.get('hits', {}).get('hits', [])
             
             return [hit['_source'] for hit in hits]
@@ -725,7 +741,7 @@ class MemoryClient:
             # Try queries in order, stop when enough results found
             all_patterns = []
             for query in queries:
-                response = await self._query_opensearch("rca-patterns", query)
+                response = await self._query_opensearch("rca-patterns/_search", query)
                 hits = response.get('hits', {}).get('hits', [])
                 all_patterns.extend([hit['_source'] for hit in hits])
                 
@@ -757,7 +773,7 @@ class MemoryClient:
                 }
             }
             
-            response = await self._query_opensearch("rca-incidents", query)
+            response = await self._query_opensearch("rca-incidents/_search", query)
             hits = response.get('hits', {}).get('hits', [])
             
             return [hit['_source'] for hit in hits]
