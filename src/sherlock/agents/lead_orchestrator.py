@@ -115,9 +115,15 @@ class LeadOrchestratorAgent:
         strands_agent = Agent(model=model)
         self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
         
-        # Initialize memory client
+        # Initialize memory client (connectivity test deferred)
         memory_config = get_memory_config()
-        self.memory_client = MemoryClient(memory_config) if memory_config["enabled"] else None
+        self.memory_enabled = False
+        if memory_config["enabled"]:
+            self.memory_client = MemoryClient(memory_config)
+            logger.info("Memory client initialized - connectivity will be tested on first use")
+        else:
+            self.memory_client = None
+            logger.info("Memory system disabled in configuration")
         
         # Initialize graph builder
         # TODO: Get real account ID from AWS STS or configuration
@@ -125,6 +131,23 @@ class LeadOrchestratorAgent:
         
         # Create the lead orchestrator agent with all specialist tools
         self.lead_agent = self._create_lead_agent()
+    
+    async def _test_memory_connectivity(self):
+        """Test memory client connectivity and enable/disable accordingly."""
+        if not self.memory_client:
+            return
+        
+        try:
+            is_connected = await self.memory_client.test_connectivity()
+            if is_connected:
+                self.memory_enabled = True
+                logger.info("Memory system connected and enabled")
+            else:
+                self.memory_enabled = False
+                logger.warning("Memory system connectivity test failed - disabled")
+        except Exception as e:
+            self.memory_enabled = False
+            logger.warning(f"Memory system disabled due to test failure: {e}")
     
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
@@ -209,6 +232,9 @@ OUTPUT: Relay specialist findings without additional interpretation"""
 
             # 4. Create investigation prompt for lead agent (enhanced with memory)
             investigation_prompt = self._create_investigation_prompt(context, memory_context)
+            
+            # Debug: Log the prompt to see what the AI is receiving
+            logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
 
             # 5. Run lead orchestrator agent
             logger.info("🤖 Running lead orchestrator agent...")
@@ -328,7 +354,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                             parsed_resource = ParsedResource(
                                 type=resource.get("type", "unknown"),
                                 name=resource.get("name", "unknown"),
-                                identifier=resource.get("arn") or resource.get("name"),
+                                arn=resource.get("arn") or resource.get("name"),
                                 region=self.region,
                                 metadata=resource.get("metadata", {})
                             )
@@ -347,9 +373,9 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             elif discovered_resources:
                 logger.info(f"📝 Adding {len(discovered_resources)} discovered resources to context")
                 # Add to primary targets without duplicates
-                existing_identifiers = {r.identifier for r in context.primary_targets}
+                existing_identifiers = {r.arn for r in context.primary_targets}
                 for resource in discovered_resources:
-                    if resource.identifier not in existing_identifiers:
+                    if resource.arn not in existing_identifiers:
                         context.primary_targets.append(resource)
             
             return context
@@ -359,8 +385,16 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             return context
     
     async def _get_memory_context(self, context: InvestigationContext) -> Optional[str]:
-        """Query memory using RAG and format context for prompt"""
+        """Query memory using RAG and format context for prompt - topology only"""
         if not self.memory_client or not context.primary_targets:
+            return None
+        
+        # Test connectivity on first use if not already tested
+        if not hasattr(self, '_memory_connectivity_tested'):
+            await self._test_memory_connectivity()
+            self._memory_connectivity_tested = True
+        
+        if not self.memory_enabled:
             return None
         
         try:
@@ -372,101 +406,39 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # Retrieve context using new RAG system
             rag_result = await self.memory_client.retrieve_context(seed, k_hop=2)
             
-            if not rag_result:
+            if not rag_result or not rag_result.subgraph:
                 return None
             
-            # Format RAG context for prompt
-            memory_context = "RELEVANT KNOWLEDGE GRAPH CONTEXT:\n\n"
+            # Only use topology information (nodes and edges)
+            subgraph = rag_result.subgraph
+            if not subgraph.get('nodes') and not subgraph.get('edges'):
+                return None
             
-            # Add subgraph info
-            if rag_result.subgraph['nodes']:
-                memory_context += f"DISCOVERED RESOURCES ({len(rag_result.subgraph['nodes'])}):\n"
-                for node in rag_result.subgraph['nodes'][:5]:  # Limit to 5 nodes
+            # Format topology context for prompt
+            memory_context = "DISCOVERED TOPOLOGY CONTEXT:\n\n"
+            
+            # Add subgraph info (nodes only)
+            if subgraph.get('nodes'):
+                memory_context += f"KNOWN RESOURCES ({len(subgraph['nodes'])}):\n"
+                for node in subgraph['nodes'][:5]:  # Limit to 5 nodes
                     memory_context += f"- {node.get('type', 'unknown')}: {node.get('name', 'unknown')}\n"
                 memory_context += "\n"
             
-            # Add relationships
-            if rag_result.subgraph['edges']:
-                memory_context += f"RELATIONSHIPS ({len(rag_result.subgraph['edges'])}):\n"
-                for edge in rag_result.subgraph['edges'][:5]:  # Limit to 5 edges
+            # Add relationships (edges only)
+            if subgraph.get('edges'):
+                memory_context += f"RESOURCE RELATIONSHIPS ({len(subgraph['edges'])}):\n"
+                for edge in subgraph['edges'][:5]:  # Limit to 5 edges
                     from_name = edge.get('from_arn', '').split(':')[-1]
                     to_name = edge.get('to_arn', '').split(':')[-1]
                     memory_context += f"- {from_name} {edge.get('rel', '')} {to_name} (confidence: {edge.get('confidence', 0):.2f})\n"
                 memory_context += "\n"
             
-            # Add patterns
-            if rag_result.patterns:
-                memory_context += f"MATCHED PATTERNS ({len(rag_result.patterns)}):\n"
-                for pattern in rag_result.patterns[:3]:  # Limit to 3 patterns
-                    memory_context += f"- {pattern.get('title', 'Unknown Pattern')}\n"
-                    memory_context += f"  Tags: {', '.join(pattern.get('tags', []))}\n"
-                    memory_context += f"  Steps: {pattern.get('playbook_steps', '')[:200]}...\n\n"
-            
-            # Add related incidents
-            if rag_result.related_incidents:
-                memory_context += f"RELATED INCIDENTS ({len(rag_result.related_incidents)}):\n"
-                for incident in rag_result.related_incidents[:3]:  # Limit to 3 incidents
-                    memory_context += f"- {incident.get('incident_id', 'Unknown')}\n"
-                    memory_context += f"  Root Cause: {incident.get('root_cause', '')[:200]}...\n"
-                    memory_context += f"  Fix: {incident.get('fix', '')[:200]}...\n\n"
-            
             return memory_context
             
         except Exception as e:
-            logger.warning(f"Memory RAG query failed: {e}")
+            logger.warning(f"Memory topology query failed: {e}")
             return None
     
-    def _format_memory_context(self, similar: List[MemoryResult]) -> str:
-        """Format memory results for prompt injection"""
-        context = "\n" + "="*60 + "\n"
-        context += "RELEVANT PAST INVESTIGATIONS (from memory system)\n"
-        context += "="*60 + "\n\n"
-        
-        for i, mem in enumerate(similar, 1):
-            outcome_icon = "✓" if mem.outcome == "resolved" else "⚠" if mem.outcome == "partial" else "✗"
-            
-            context += f"{i}. Investigation #{mem.investigation_id} (similarity: {mem.similarity_score:.2f})\n"
-            context += f"   Resource: {mem.resource_type}:{mem.resource_name}\n"
-            context += f"   Root Cause: {mem.root_cause_summary}\n"
-            context += f"   Solution: {mem.advice_summary}\n"
-            context += f"   Outcome: {outcome_icon} {mem.outcome.upper()} (quality: {mem.quality_score:.2f})\n"
-            context += f"   Date: {mem.created_at}\n\n"
-        
-        # Add learned patterns
-        patterns = self._extract_patterns(similar)
-        if patterns:
-            context += "\nLEARNED PATTERNS:\n"
-            context += patterns + "\n"
-        
-        context += "="*60 + "\n"
-        context += "Use the above historical context to inform your investigation.\n"
-        context += "Prioritize solutions that have been proven effective.\n"
-        context += "="*60 + "\n\n"
-        
-        return context
-    
-    def _extract_patterns(self, similar: List[MemoryResult]) -> str:
-        """Extract common patterns from similar investigations"""
-        # Count most common root causes
-        root_causes = {}
-        successful_advice = {}
-        
-        for mem in similar:
-            if mem.outcome == "resolved":
-                root_causes[mem.error_type] = root_causes.get(mem.error_type, 0) + 1
-                successful_advice[mem.advice_summary] = successful_advice.get(mem.advice_summary, 0) + 1
-        
-        patterns = []
-        
-        if root_causes:
-            most_common = max(root_causes.items(), key=lambda x: x[1])
-            patterns.append(f"- {most_common[0]} is the most common root cause ({most_common[1]}/{len(similar)} cases)")
-        
-        if successful_advice:
-            top_advice = max(successful_advice.items(), key=lambda x: x[1])
-            patterns.append(f"- Successfully resolved {top_advice[1]} times with: {top_advice[0]}")
-        
-        return "\n".join(patterns) if patterns else ""
     
     def _create_investigation_prompt(self, context: InvestigationContext, memory_context: Optional[str] = None) -> str:
         """Create investigation prompt for the lead orchestrator agent"""
@@ -476,6 +448,18 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         
         if context.trace_ids:
             prompt_parts.append(f"X-Ray Trace ID: {context.trace_ids[0]}")
+            
+            # Add trace data for immediate analysis
+            try:
+                from ..tools import get_xray_trace
+                trace_data = get_xray_trace(context.trace_ids[0], region=self.region)
+                if trace_data and "error" not in trace_data:
+                    prompt_parts.append(f"\nTRACE DATA FOR ANALYSIS:")
+                    prompt_parts.append(f"```json")
+                    prompt_parts.append(trace_data)
+                    prompt_parts.append(f"```")
+            except Exception as e:
+                prompt_parts.append(f"\nNote: Could not retrieve trace data: {e}")
         
         if context.error_messages:
             prompt_parts.append(f"Error: {context.error_messages[0]}")
@@ -483,6 +467,16 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         if context.primary_targets:
             targets_text = ", ".join([f"{t.type}:{t.name}" for t in context.primary_targets])
             prompt_parts.append(f"Target Resources: {targets_text}")
+            
+            # Add specific resource details to prevent hallucination
+            for target in context.primary_targets:
+                if target.type == "apigateway" and target.arn:
+                    # Extract API ID from ARN to prevent hallucination
+                    if "restapis/" in target.arn:
+                        api_id = target.arn.split("restapis/")[1].split("/")[0]
+                        prompt_parts.append(f"  - API Gateway ID: {api_id} (use this exact ID, not 'shp123456')")
+                elif target.type == "lambda_function":
+                    prompt_parts.append(f"  - Lambda Function: {target.name} (only investigate if explicitly listed)")
         else:
             prompt_parts.append("\n⚠️ CRITICAL: No AWS resources identified.")
             prompt_parts.append("DO NOT assume, infer, or hallucinate resource names.")
@@ -495,23 +489,44 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             prompt_parts.append(memory_context)
         
         prompt_parts.append("\nTASK:")
-        prompt_parts.append("Conduct root cause analysis using specialist agents.")
+        prompt_parts.append("Conduct root cause analysis by FIRST analyzing trace data, THEN using specialist agents.")
         
-        prompt_parts.append("\nIMPORTANT RULES:")
-        prompt_parts.append("1. ONLY investigate resources explicitly listed above")
-        prompt_parts.append("2. DO NOT make up resource names, ARNs, or identifiers")
-        prompt_parts.append("3. Base analysis ONLY on data returned from tools")
-        prompt_parts.append("4. If tool returns 'ResourceNotFoundException', report as fact")
-        prompt_parts.append("5. If no data available, state 'Insufficient data'")
+        prompt_parts.append("\n🔍 CRITICAL TRACE ANALYSIS RULES:")
+        prompt_parts.append("1. ALWAYS start by analyzing the X-Ray trace data to understand the error flow")
+        prompt_parts.append("2. Look for HTTP status codes, fault/error flags, and response content lengths")
+        prompt_parts.append("3. Identify which component actually failed (Lambda 500, API Gateway fault, etc.)")
+        prompt_parts.append("4. Focus investigation on the component that shows the actual error")
+        prompt_parts.append("5. DO NOT assume configuration issues if the trace shows code errors")
         
-        if memory_context:
-            prompt_parts.append("6. Use historical context to inform analysis")
+        prompt_parts.append("\n🚨 ANTI-HALLUCINATION RULES:")
+        prompt_parts.append("1. ONLY investigate resources explicitly listed in 'Target Resources' above")
+        prompt_parts.append("2. DO NOT make up, assume, or infer resource names, ARNs, or identifiers")
+        prompt_parts.append("3. DO NOT investigate Lambda functions unless explicitly listed in Target Resources")
+        prompt_parts.append("4. DO NOT investigate Step Functions unless explicitly listed in Target Resources")
+        prompt_parts.append("5. DO NOT use placeholder API IDs like 'shp123456' - use actual IDs from trace data")
+        prompt_parts.append("6. Base analysis ONLY on data returned from tools")
+        prompt_parts.append("7. If tool returns 'ResourceNotFoundException', report as fact")
+        prompt_parts.append("8. If no data available, state 'Insufficient data'")
+        prompt_parts.append("9. If you see 'STEPFUNCTIONS' in trace data, it is NOT a Lambda function")
+        prompt_parts.append("10. If you see 'sherlock-handler' or similar names, DO NOT investigate unless listed in Target Resources")
         
         prompt_parts.append("\nWORKFLOW:")
-        prompt_parts.append("1. Analyze X-Ray trace if available")
-        prompt_parts.append("2. Call specialist tools for listed resources only")
-        prompt_parts.append("3. Synthesize findings from tool outputs")
-        prompt_parts.append("4. Provide recommendations based on actual data")
+        prompt_parts.append("1. FIRST: Analyze X-Ray trace data to identify the actual error source")
+        prompt_parts.append("2. SECOND: Call specialist tools for the failing component")
+        prompt_parts.append("3. THIRD: Synthesize findings from trace analysis + tool outputs")
+        prompt_parts.append("4. FOURTH: Provide recommendations based on actual error evidence")
+        
+        prompt_parts.append("\nTRACE ANALYSIS PRINCIPLES:")
+        prompt_parts.append("- Look for HTTP status codes: 500 = server error, 400 = client error, 200 = success")
+        prompt_parts.append("- Check fault/error flags: fault=true indicates a problem, error=true indicates downstream issues")
+        prompt_parts.append("- Follow the error flow: if a service calls another service and gets an error, investigate the called service")
+        prompt_parts.append("- Check response content_length: > 0 means there's an error response body with details")
+        prompt_parts.append("- Look at subsegments: they show the actual service calls and their results")
+        
+        prompt_parts.append("\nEXAMPLE OF CORRECT BEHAVIOR:")
+        prompt_parts.append("- Trace shows Service A calls Service B, Service B returns HTTP 500 → Investigate Service B")
+        prompt_parts.append("- Trace shows Service A fault:true + Service B returns 500 → Root cause is Service B, not Service A config")
+        prompt_parts.append("- Trace shows HTTP 500 + content_length > 0 → Check the error response body for details")
         
         return "\n".join(prompt_parts)
     
@@ -708,136 +723,11 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             for pointer in all_pointers:
                 await self.memory_client.upsert_pointer(pointer)
             
-            # Save incident to memory
-            incident = self._create_incident_from_report(report, context, all_nodes)
-            if incident:
-                await self.memory_client.save_incident(incident)
-            
-            # Optionally create pattern if investigation was successful
-            if report.status == "completed" and len(facts) > 5:
-                pattern = await self._create_pattern_from_investigation(facts, report.hypotheses, report.advice, all_nodes, all_edges)
-                if pattern:
-                    await self.memory_client.save_pattern(pattern)
-            
             logger.info(f"✅ Knowledge graph updated: {len(all_nodes)} nodes, {len(all_edges)} edges")
             
         except Exception as e:
             logger.error(f"Failed to build knowledge graph: {e}")
     
-    def _create_incident_from_report(self, report: InvestigationReport, context: InvestigationContext, nodes: List[GraphNode]) -> Optional[Incident]:
-        """Create incident record from investigation report."""
-        try:
-            # Extract root cause from report
-            root_cause = ""
-            if report.root_cause_analysis and report.root_cause_analysis.primary_root_cause:
-                root_cause = report.root_cause_analysis.primary_root_cause
-            
-            # Extract signals from facts
-            signals = []
-            for fact in report.facts:
-                if "error" in fact.description.lower() or "exception" in fact.description.lower():
-                    signals.append(fact.description[:100])
-            
-            # Extract fix from advice
-            fix = ""
-            if report.advice:
-                fix = "; ".join([advice.description for advice in report.advice[:3]])
-            
-            # Extract useful queries from facts
-            useful_queries = ""
-            for fact in report.facts:
-                if "query" in fact.description.lower() or "command" in fact.description.lower():
-                    useful_queries += fact.description + "\n"
-            
-            incident = Incident(
-                incident_id=report.run_id,
-                nodes=[node.arn for node in nodes],
-                root_cause=root_cause,
-                signals=signals,
-                fix=fix,
-                useful_queries=useful_queries,
-                pattern_ids=[],  # Will be populated if patterns are created
-                created_at=report.started_at.isoformat(),
-                account_id=self.graph_builder.account_id,
-                region=self.region
-            )
-            
-            return incident
-            
-        except Exception as e:
-            logger.error(f"Failed to create incident from report: {e}")
-            return None
-    
-    async def _create_pattern_from_investigation(self, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], nodes: List[GraphNode], edges: List[GraphEdge]) -> Optional[Pattern]:
-        """Create pattern from successful investigation using structural signatures."""
-        try:
-            # Build pattern content
-            pattern_title = f"Pattern: {len(nodes)} resource investigation"
-            
-            # Extract tags from node types
-            node_types = sorted(list(set([node.type for node in nodes])))
-            tags = node_types + ["investigation", "pattern"]
-            
-            # Build playbook steps from advice
-            playbook_steps = "\n".join([f"{i+1}. {adv.description}" for i, adv in enumerate(advice[:5])])
-            
-            # Build structural signatures
-            topology_sig = self._build_topology_signature_from_graph(nodes, edges)
-            relationship_types = sorted(list(set([e.rel for e in edges])))
-            
-            signatures = {
-                "topology_signature": topology_sig,
-                "resource_types": node_types,
-                "relationship_types": relationship_types,
-                "depth": self._calculate_graph_depth(edges),
-                "stack_signature": self._build_stack_signature(nodes, edges),
-                "topology_motif": self._build_topology_motif(edges)
-            }
-            
-            pattern = Pattern(
-                pattern_id=f"P-{int(datetime.now().timestamp())}",
-                title=pattern_title,
-                tags=tags,
-                signatures=signatures,
-                playbook_steps=playbook_steps,
-                popularity=0.0,
-                last_used_at=datetime.now(timezone.utc).isoformat(),
-                match_count=0
-            )
-            
-            return pattern
-            
-        except Exception as e:
-            logger.error(f"Failed to create pattern from investigation: {e}")
-            return None
-    
-    def _build_stack_signature(self, nodes: List[GraphNode], edges: List[GraphEdge]) -> str:
-        """Build stack signature from nodes and edges."""
-        node_types = sorted([node.type for node in nodes])
-        edge_types = sorted([edge.rel for edge in edges])
-        return f"{'-'.join(node_types)}:{'-'.join(edge_types)}"
-    
-    def _build_topology_motif(self, edges: List[GraphEdge]) -> List[str]:
-        """Build topology motif from edges."""
-        motifs = []
-        for edge in edges:
-            from_type = edge.from_arn.split(':')[2] if ':' in edge.from_arn else 'unknown'
-            to_type = edge.to_arn.split(':')[2] if ':' in edge.to_arn else 'unknown'
-            motifs.append(f"{from_type}->{to_type}({edge.rel})")
-        return motifs
-
-    def _build_topology_signature_from_graph(self, nodes: List[GraphNode], edges: List[GraphEdge]) -> str:
-        """Generate topology signature from graph nodes and edges."""
-        import hashlib
-        node_types = sorted([n.type for n in nodes])
-        edge_rels = sorted([e.rel for e in edges])
-        content = f"nodes:{','.join(node_types)}|edges:{','.join(edge_rels)}"
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-    def _calculate_graph_depth(self, edges: List[GraphEdge]) -> int:
-        """Calculate maximum depth of graph."""
-        # Simple approximation: max path length
-        return min(len(edges), 10)
     
     async def _get_trace_data(self, trace_id: str) -> Optional[Dict[str, Any]]:
         """Get X-Ray trace data using the xray tool."""
@@ -848,6 +738,9 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # Call the actual X-Ray trace tool
             trace_json = get_xray_trace(trace_id, region=self.region)
             trace_data = json.loads(trace_json)
+            
+            # Debug: Log the full trace data structure
+            logger.info(f"DEBUG: Full trace data for {trace_id}: {json.dumps(trace_data, indent=2)}")
             
             # Check for errors
             if "error" in trace_data:
@@ -868,13 +761,20 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             log_group_map = {
                 "lambda": f"/aws/lambda/{resource_name}",
                 "apigateway": f"/aws/apigateway/{resource_name}",
-                "stepfunctions": f"/aws/states/{resource_name}"
+                "stepfunctions": f"/aws/states/{resource_name}",
+                "xray_trace": None,  # X-Ray traces don't have log groups
+                "trace": None,  # Alternative name for traces
+                "unknown": None  # Skip unknown types
             }
             
             log_group = log_group_map.get(resource_type.lower())
             if not log_group:
-                logger.warning(f"Unknown resource type for logs: {resource_type}")
-                return None
+                if resource_type.lower() in ["xray_trace", "trace", "unknown"]:
+                    logger.info(f"Skipping log extraction for {resource_type} - no log group available")
+                    return None
+                else:
+                    logger.warning(f"Unknown resource type for logs: {resource_type}")
+                    return None
             
             logs_json = get_cloudwatch_logs(log_group, hours_back=1, region=self.region)
             logs_data = json.loads(logs_json)

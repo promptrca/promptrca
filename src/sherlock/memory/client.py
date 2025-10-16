@@ -127,7 +127,8 @@ class MemoryClient:
             return False
         
         try:
-            doc_id = node.arn
+            # Create a safe document ID by encoding the ARN
+            doc_id = self._create_safe_doc_id(node.arn)
             doc_body = node.to_dict()
             
             await self._upsert_document("rca-nodes", doc_id, doc_body)
@@ -202,7 +203,8 @@ class MemoryClient:
             return False
         
         try:
-            doc_id = pointer.arn
+            # Create a safe document ID by encoding the ARN
+            doc_id = self._create_safe_doc_id(pointer.arn)
             doc_body = pointer.to_dict()
             
             await self._upsert_document("rca-pointers", doc_id, doc_body)
@@ -801,6 +803,14 @@ class MemoryClient:
         except Exception as e:
             logger.error(f"Failed to create index {index_name}: {e}")
             return False
+    
+    def _create_safe_doc_id(self, arn: str) -> str:
+        """Create a safe document ID from an ARN by encoding special characters."""
+        import base64
+        import urllib.parse
+        
+        # URL encode the ARN to make it safe for use as a document ID
+        return urllib.parse.quote(arn, safe='')
     
     async def _upsert_document(self, index: str, doc_id: str, doc_body: Dict[str, Any]) -> None:
         """Upsert document using update API with doc_as_upsert."""

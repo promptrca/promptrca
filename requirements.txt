@@ -62,6 +62,7 @@ packaging==25.0
 starlette==0.48.0
 sse-starlette==3.0.2
 python-multipart==0.0.20
+uvicorn>=0.34.2
 
 # Metadata and imports
 importlib-metadata==8.7.0

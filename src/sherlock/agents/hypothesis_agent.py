@@ -91,7 +91,7 @@ RULES:
 - Do NOT invent scenarios not in facts
 - Rank by confidence (highest first)
 
-OUTPUT: JSON [{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}]"""
+OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}}]"""
 
         try:
             # Use Strands agent to generate hypotheses (call agent directly)

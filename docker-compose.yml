@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   opensearch:
     image: opensearchproject/opensearch:2.11.0
@@ -51,6 +49,7 @@ services:
         condition: service_healthy
     volumes:
       - ~/.aws:/root/.aws:ro  # Optional: mount AWS credentials
+      - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
       interval: 30s

@@ -120,6 +120,9 @@ def main():
                        type=int,
                        default=8080,
                        help="Port to run the server on (default: 8080)")
+    parser.add_argument("--reload",
+                       action="store_true",
+                       help="Enable hot reloading for development")
     
     args = parser.parse_args()
     
@@ -148,7 +151,15 @@ def main():
     print("📊 Status Check:")
     print("curl http://localhost:8080/status")
     print("=====================================================")
-    app.run(port=args.port)
+    
+    if args.reload:
+        # Use uvicorn with hot reloading for development
+        import uvicorn
+        print("🔄 Hot reloading enabled - server will restart on code changes")
+        uvicorn.run("sherlock.server:app", host="0.0.0.0", port=args.port, reload=True)
+    else:
+        # Use AgentCore's built-in server for production
+        app.run(port=args.port)
 
 
 if __name__ == "__main__":

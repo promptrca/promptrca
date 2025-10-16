@@ -43,17 +43,31 @@ class GraphBuilder:
         pointers = []
         
         try:
-            segments = trace_data.get('Segments', [])
+            segments = trace_data.get('segments', [])
             discovered_arns = set()
             
-            for segment in segments:
-                segment_doc = segment.get('Document', {})
+            logger.info(f"DEBUG: Trace data keys: {list(trace_data.keys())}")
+            logger.info(f"DEBUG: Number of segments: {len(segments)}")
+            
+            for i, segment in enumerate(segments):
+                logger.info(f"DEBUG: Segment {i} keys: {list(segment.keys())}")
+                logger.info(f"DEBUG: Segment {i} Document type: {type(segment.get('Document', {}))}")
+                if isinstance(segment.get('Document', {}), str):
+                    logger.info(f"DEBUG: Segment {i} Document preview: {segment.get('Document', '')[:200]}...")
+                else:
+                    logger.info(f"DEBUG: Segment {i} Document keys: {list(segment.get('Document', {}).keys())}")
+                segment_doc = segment.get('Document', '')
                 
                 # Parse JSON if needed
                 if isinstance(segment_doc, str):
+                    logger.info(f"DEBUG: Parsing JSON for segment {i}, length: {len(segment_doc)}")
                     try:
                         segment_doc = json.loads(segment_doc)
-                    except:
+                        logger.info(f"DEBUG: Parsed segment_doc keys: {list(segment_doc.keys())}")
+                        logger.info(f"DEBUG: subsegments found: {len(segment_doc.get('subsegments', []))}")
+                    except Exception as e:
+                        logger.error(f"Failed to parse segment_doc JSON: {e}")
+                        logger.error(f"JSON content: {segment_doc[:500]}...")
                         continue
                 
                 # Extract node from segment
@@ -69,10 +83,16 @@ class GraphBuilder:
                 
                 # Extract edges from subsegments
                 subsegments = segment_doc.get('subsegments', [])
-                for subsegment in subsegments:
+                logger.info(f"DEBUG: Found {len(subsegments)} subsegments in segment {i}")
+                for j, subsegment in enumerate(subsegments):
+                    logger.info(f"DEBUG: Processing subsegment {j}: {subsegment.get('name', 'unknown')} (origin: {subsegment.get('origin', 'unknown')})")
+                    logger.info(f"DEBUG: Subsegment {j} keys: {list(subsegment.keys())}")
                     edge = self._extract_edge_from_subsegment(segment_doc, subsegment)
                     if edge:
+                        logger.info(f"DEBUG: Successfully extracted edge: {edge.from_arn} -> {edge.to_arn} ({edge.rel})")
                         edges.append(edge)
+                    else:
+                        logger.info(f"DEBUG: Failed to extract edge from subsegment {j}")
             
             logger.info(f"Extracted {len(nodes)} nodes, {len(edges)} edges from trace")
             return nodes, edges, pointers
@@ -205,7 +225,35 @@ class GraphBuilder:
             subsegment_name = subsegment.get('name', '')
             subsegment_arn = subsegment.get('resource_arn', '')
             
+            # If subsegment doesn't have resource_arn, try to construct it from origin and name
+            if not subsegment_arn:
+                origin = subsegment.get('origin', '')
+                if origin and subsegment_name:
+                    # Try to construct ARN from origin and name
+                    if 'AWS::STEPFUNCTIONS' in origin:
+                        subsegment_arn = f"arn:aws:states:{self.region}:{self.account_id}:stateMachine:{subsegment_name}"
+                    elif 'AWS::Lambda' in origin:
+                        subsegment_arn = f"arn:aws:lambda:{self.region}:{self.account_id}:function:{subsegment_name}"
+                    elif 'AWS::ApiGateway' in origin:
+                        subsegment_arn = f"arn:aws:apigateway:{self.region}::/restapis/{subsegment_name}"
+                    else:
+                        # For other services, create a generic ARN
+                        subsegment_arn = f"arn:aws:unknown:{self.region}:{self.account_id}:{subsegment_name}"
+                elif subsegment_name:
+                    # If no origin but we have a name, try to infer from the name
+                    if 'STEPFUNCTIONS' in subsegment_name.upper():
+                        subsegment_arn = f"arn:aws:states:{self.region}:{self.account_id}:stateMachine:{subsegment_name}"
+                    elif 'LAMBDA' in subsegment_name.upper():
+                        subsegment_arn = f"arn:aws:lambda:{self.region}:{self.account_id}:function:{subsegment_name}"
+                    elif 'API' in subsegment_name.upper():
+                        subsegment_arn = f"arn:aws:apigateway:{self.region}::/restapis/{subsegment_name}"
+                    else:
+                        # For other services, create a generic ARN
+                        subsegment_arn = f"arn:aws:unknown:{self.region}:{self.account_id}:{subsegment_name}"
+            
             if not parent_arn or not subsegment_arn:
+                logger.debug(f"Missing ARNs: parent_arn='{parent_arn}', subsegment_arn='{subsegment_arn}'")
+                logger.debug(f"Subsegment data: {subsegment}")
                 return None
             
             # Infer relationship type
@@ -266,6 +314,8 @@ class GraphBuilder:
     
     def _parse_resource_info(self, name: str, origin: str, resource_arn: str) -> Tuple[str, str]:
         """Parse resource type and name from segment info."""
+        logger.info(f"DEBUG: _parse_resource_info called with name='{name}', origin='{origin}', resource_arn='{resource_arn}'")
+        
         # Lambda detection
         if 'AWS::Lambda' in origin or 'lambda' in name.lower():
             return 'lambda', name

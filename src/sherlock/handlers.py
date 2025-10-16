@@ -28,6 +28,7 @@ from typing import Dict, Any
 from strands import Agent
 
 from .core import SherlockInvestigator
+from .agents.lead_orchestrator import LeadOrchestratorAgent
 from .utils.config import get_region, create_bedrock_model
 
 # Configure Bedrock model - initialized once, reused across invocations
@@ -44,6 +45,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
     Args:
         payload: Investigation request with one of:
             - free_text_input: Natural language description
+            - investigation_inputs: Natural language description (new format)
             - function_name: Lambda function name (legacy)
             - investigation_target: Structured target specification
 
@@ -58,6 +60,14 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         if "free_text_input" in payload:
             return _handle_free_text_investigation(
                 payload["free_text_input"],
+                region,
+                agent
+            )
+
+        # Check for new investigation_inputs format
+        if "investigation_inputs" in payload:
+            return _handle_investigation_inputs(
+                payload["investigation_inputs"],
                 region,
                 agent
             )
@@ -123,6 +133,43 @@ def _handle_free_text_investigation(
         response["investigation"]["region"] = region
         response["investigation"]["input_type"] = "free_text"
         response["investigation"]["original_input"] = free_text
+
+        return response
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Multi-agent investigation failed: {str(e)}"
+        }
+
+
+def _handle_investigation_inputs(
+    investigation_inputs: str,
+    region: str,
+    strands_agent: Agent
+) -> Dict[str, Any]:
+    """Handle investigation_inputs using multi-agent orchestration."""
+    try:
+        from .agents.lead_orchestrator import LeadOrchestratorAgent
+
+        # Initialize lead orchestrator agent
+        orchestrator = LeadOrchestratorAgent(strands_agent.model)
+
+        # Prepare input for investigation
+        inputs = {
+            "investigation_inputs": investigation_inputs
+        }
+
+        # Run multi-agent investigation (async)
+        report = asyncio.run(orchestrator.investigate(inputs, region))
+
+        # Convert to structured response
+        response = report.to_dict()
+
+        # Add investigation metadata
+        response["investigation"]["region"] = region
+        response["investigation"]["input_type"] = "investigation_inputs"
+        response["investigation"]["original_input"] = investigation_inputs
 
         return response
 
