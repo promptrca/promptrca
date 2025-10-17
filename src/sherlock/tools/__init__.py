@@ -120,6 +120,15 @@ from .vpc_tools import (
     get_internet_gateway_config
 )
 
+# AWS Knowledge MCP tools (optional)
+from .aws_knowledge_tools import (
+    search_aws_documentation,
+    read_aws_documentation,
+    get_aws_documentation_recommendations,
+    list_aws_regions,
+    get_service_regional_availability
+)
+
 __all__ = [
     # Lambda tools
     'get_lambda_config',
@@ -195,6 +204,13 @@ __all__ = [
     'get_security_group_config',
     'get_network_interface_config',
     'get_nat_gateway_config',
-    'get_internet_gateway_config'
+    'get_internet_gateway_config',
+    
+    # AWS Knowledge MCP tools
+    'search_aws_documentation',
+    'read_aws_documentation',
+    'get_aws_documentation_recommendations',
+    'list_aws_regions',
+    'get_service_regional_availability'
 ]
 

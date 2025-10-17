@@ -285,6 +285,30 @@ Region detection follows this priority:
 2. `AWS_DEFAULT_REGION` (fallback)
 3. `eu-west-1` (default)
 
+### AWS Knowledge MCP Server (Optional)
+
+Sherlock can integrate with the AWS Knowledge MCP Server to provide enhanced advice based on official AWS documentation, best practices, and regional availability information.
+
+**Environment Variables:**
+- `ENABLE_AWS_KNOWLEDGE_MCP` - Enable/disable MCP integration (default: false)
+- `AWS_KNOWLEDGE_MCP_URL` - MCP server URL (default: https://knowledge-mcp.global.api.aws)
+- `AWS_KNOWLEDGE_MCP_TIMEOUT` - Request timeout in seconds (default: 5)
+- `AWS_KNOWLEDGE_MCP_RETRIES` - Max retry attempts (default: 2)
+
+**Features:**
+- Search AWS documentation for best practices
+- Get official AWS guidance and recommendations
+- Check regional availability of AWS services
+- Enhanced advice generation with current AWS knowledge
+
+**Benefits:**
+- More accurate recommendations based on official AWS docs
+- Up-to-date best practices and guidance
+- Regional awareness for multi-region deployments
+- Reduced hallucinations in advice generation
+
+**Note:** This is an optional enhancement. Sherlock works perfectly without it, but provides richer advice when enabled.
+
 - **Zero impact** when disabled - investigations work normally
 
 ### Example Configuration
@@ -295,6 +319,10 @@ export SHERLOCK_TEMPERATURE="0.3"
 
 # Set region
 export AWS_REGION="us-east-1"
+
+# Enable AWS Knowledge MCP (optional - disabled by default)
+export ENABLE_AWS_KNOWLEDGE_MCP="true"
+export AWS_KNOWLEDGE_MCP_TIMEOUT="5"
 
 # Run with custom configuration
 make run-with-aws
