@@ -120,14 +120,18 @@ from .vpc_tools import (
     get_internet_gateway_config
 )
 
-# AWS Knowledge MCP tools (optional)
-from .aws_knowledge_tools import (
-    search_aws_documentation,
-    read_aws_documentation,
-    get_aws_documentation_recommendations,
-    list_aws_regions,
-    get_service_regional_availability
-)
+# AWS Knowledge MCP tools (optional) - conditionally imported based on feature flag
+try:
+    from .aws_knowledge_tools import (
+        search_aws_documentation,
+        read_aws_documentation,
+        get_aws_documentation_recommendations,
+        list_aws_regions,
+        get_service_regional_availability
+    )
+    _aws_knowledge_tools_available = True
+except ImportError:
+    _aws_knowledge_tools_available = False
 
 __all__ = [
     # Lambda tools
@@ -206,11 +210,7 @@ __all__ = [
     'get_nat_gateway_config',
     'get_internet_gateway_config',
     
-    # AWS Knowledge MCP tools
-    'search_aws_documentation',
-    'read_aws_documentation',
-    'get_aws_documentation_recommendations',
-    'list_aws_regions',
-    'get_service_regional_availability'
+    # AWS Knowledge MCP tools (only if available)
+    *(['search_aws_documentation', 'read_aws_documentation', 'get_aws_documentation_recommendations', 'list_aws_regions', 'get_service_regional_availability'] if _aws_knowledge_tools_available else [])
 ]
 

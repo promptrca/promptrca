@@ -62,7 +62,13 @@ CRITICAL RULES:
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_stepfunctions_definition, get_iam_role_config, get_cloudwatch_logs]
+        tools=[get_stepfunctions_definition, get_iam_role_config, get_cloudwatch_logs],
+        trace_attributes={
+            "service.name": "sherlock-stepfunctions-agent",
+            "service.version": "1.0.0",
+            "agent.type": "stepfunctions_specialist",
+            "aws.service": "stepfunctions"
+        }
     )
 
 

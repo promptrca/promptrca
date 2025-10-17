@@ -54,6 +54,10 @@ from typing import Dict, Any
 
 from .handlers import handle_investigation
 
+# Initialize telemetry on module import (Lambda cold start)
+from .utils.config import setup_strands_telemetry
+setup_strands_telemetry()
+
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
