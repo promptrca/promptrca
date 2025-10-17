@@ -31,6 +31,7 @@ from strands import Agent, tool
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
 from ..utils.config import get_region, create_orchestrator_model, create_lambda_agent_model, create_apigateway_agent_model, create_stepfunctions_agent_model, create_iam_agent_model, create_dynamodb_agent_model, create_s3_agent_model, create_sqs_agent_model, create_sns_agent_model, create_eventbridge_agent_model, create_vpc_agent_model, create_hypothesis_agent_model, create_root_cause_agent_model
+from ..utils.token_tracker import TokenTracker, set_current_tracker, get_current_tracker
 from ..agents.input_parser_agent import ParsedInputs, ParsedResource
 from ..agents.specialized.lambda_agent import create_lambda_agent, create_lambda_agent_tool
 from ..agents.specialized.apigateway_agent import create_apigateway_agent, create_apigateway_agent_tool
@@ -191,6 +192,10 @@ OUTPUT: Relay specialist findings without additional interpretation"""
         import time
         investigation_id = f"{int(time.time() * 1000)}.{hash(str(inputs)) % 10000}"
 
+        # Initialize token tracker for this investigation
+        token_tracker = TokenTracker()
+        set_current_tracker(token_tracker)
+
         try:
             # 1. Parse inputs
             parsed_inputs = self._parse_inputs(inputs, region)
@@ -216,6 +221,12 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             # 5. Run lead orchestrator agent
             logger.info("🤖 Running lead orchestrator agent...")
             agent_result = self.lead_agent(investigation_prompt)
+            
+            # Record token usage for lead orchestrator
+            if token_tracker:
+                from ..utils.token_tracker import extract_model_id_from_bedrock_model
+                model_id = extract_model_id_from_bedrock_model(self.model)
+                token_tracker.record_agent_invocation("lead_orchestrator", model_id, agent_result.metrics)
             
             # 6. Parse agent response and extract structured data
             facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
@@ -714,6 +725,14 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             "region": region
         }
         
+        # Get token usage and cost analysis from tracker
+        token_usage = None
+        cost_analysis = None
+        token_tracker = get_current_tracker()
+        if token_tracker:
+            token_usage = token_tracker.get_usage_summary()
+            cost_analysis = token_tracker.get_cost_analysis()
+
         return InvestigationReport(
             run_id=str(start_time.timestamp()),
             status="completed",
@@ -727,6 +746,8 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             hypotheses=hypotheses,
             advice=advice,
             timeline=timeline,
+            token_usage=token_usage,
+            cost_analysis=cost_analysis,
             summary=json.dumps(summary)
         )
     

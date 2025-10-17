@@ -93,7 +93,12 @@ OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evi
             # Use Strands agent to generate hypotheses (call agent directly)
             response = self.strands_agent(prompt)
 
-            # Cost tracking removed
+            # Record token usage
+            from ..utils.token_tracker import get_current_tracker, extract_model_id_from_bedrock_model
+            token_tracker = get_current_tracker()
+            if token_tracker and hasattr(response, 'metrics'):
+                model_id = extract_model_id_from_bedrock_model(self.strands_agent.model)
+                token_tracker.record_agent_invocation("hypothesis_agent", model_id, response.metrics)
 
             # Parse response
             hypotheses_data = self._parse_ai_response(response)

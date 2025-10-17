@@ -110,7 +110,12 @@ OUTPUT: JSON {{"primary_root_cause_index": 0, "contributing_factor_indices": [1,
             # Use Strands agent
             response = self.strands_agent(prompt)
 
-            # Cost tracking removed
+            # Record token usage
+            from ..utils.token_tracker import get_current_tracker, extract_model_id_from_bedrock_model
+            token_tracker = get_current_tracker()
+            if token_tracker and hasattr(response, 'metrics'):
+                model_id = extract_model_id_from_bedrock_model(self.strands_agent.model)
+                token_tracker.record_agent_invocation("root_cause_agent", model_id, response.metrics)
 
             # Parse response
             ai_response = self._parse_root_cause_response(response)

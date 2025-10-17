@@ -106,6 +106,26 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         # Convert to structured response
         response = report.to_dict()
 
+        # Log token usage and cost summary
+        if report.token_usage:
+            from .utils.pricing import calculate_investigation_cost, format_cost_report
+            
+            logger.info(f"📊 Token Usage Summary:")
+            logger.info(f"   Total tokens: {report.token_usage.get('total_tokens', 0)}")
+            logger.info(f"   Input tokens: {report.token_usage.get('total_input_tokens', 0)}")
+            logger.info(f"   Output tokens: {report.token_usage.get('total_output_tokens', 0)}")
+            logger.info(f"   By model: {report.token_usage.get('by_model', {})}")
+            logger.info(f"   By agent: {report.token_usage.get('by_agent', {})}")
+            
+            # Calculate and log cost information
+            cost_data = calculate_investigation_cost(report.token_usage)
+            logger.info(f"💰 Investigation Cost: ${cost_data['summary']['total_cost']:.6f} USD")
+            logger.info(f"   Standard pricing: ${cost_data['summary']['total_cost']:.6f} USD")
+            
+            # Also calculate batch pricing for comparison
+            batch_cost_data = calculate_investigation_cost(report.token_usage, use_batch_pricing=True)
+            logger.info(f"   Batch pricing: ${batch_cost_data['summary']['total_cost']:.6f} USD")
+            logger.info(f"   Potential savings: ${cost_data['summary']['total_cost'] - batch_cost_data['summary']['total_cost']:.6f} USD")
 
         # Add investigation metadata
         response["investigation"]["region"] = region
