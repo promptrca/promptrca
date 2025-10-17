@@ -8,7 +8,7 @@ This directory contains the reorganized Sherlock core package with service-speci
 ```bash
 # Copy environment template
 cp .env.example .env
-# Edit .env with your AWS credentials
+# Edit .env with your AWS credentials and model preferences
 
 # Start all services (Sherlock HTTP server + Lambda container)
 docker-compose up -d
@@ -187,14 +187,96 @@ When deployed to AWS Lambda, credentials are automatically provided via the Lamb
 
 ## Configuration
 
-Sherlock supports several environment variables for configuration:
+Sherlock supports comprehensive environment variable configuration for models and AWS settings.
 
-### Model Configuration
-- `SHERLOCK_MODEL_ID` - Bedrock model identifier (default: "openai.gpt-oss-120b-1:0")
-- `SHERLOCK_TEMPERATURE` - Model temperature 0.0-1.0 (default: 0.7)
+### Hierarchical Model Configuration
+
+Sherlock supports a flexible 3-tier hierarchical configuration system, allowing you to configure models at different levels of granularity:
+
+1. **Agent-specific** (highest priority) - Override for individual agents
+2. **Category-specific** (middle priority) - Configure entire categories of agents
+3. **Global default** (fallback) - Default for all agents
+
+#### Global Model Configuration (Fallback)
+- `BEDROCK_MODEL_ID` - Default Bedrock model for all agents (fallback)
+- `SHERLOCK_TEMPERATURE` - Default temperature for all agents (fallback)
 - `SHERLOCK_MAX_TOKENS` - Maximum tokens (optional)
 
-### Region Configuration
+#### Category-Level Configuration
+
+Configure entire categories of agents with a single setting:
+
+**Specialist Agents (AWS Service Specialists):**
+- `SHERLOCK_SPECIALIST_MODEL_ID` - Model for all AWS service specialists
+- `SHERLOCK_SPECIALIST_TEMPERATURE` - Temperature for all specialists
+
+**Analysis Agents (Hypothesis & Root Cause):**
+- `SHERLOCK_ANALYSIS_MODEL_ID` - Model for all analysis agents
+- `SHERLOCK_ANALYSIS_TEMPERATURE` - Temperature for all analysis agents
+
+#### Agent-Specific Model Configuration
+
+Override category settings for individual agents:
+
+**Lead Orchestrator Agent:**
+- `SHERLOCK_ORCHESTRATOR_MODEL_ID` - Model for coordinating all other agents
+- `SHERLOCK_ORCHESTRATOR_TEMPERATURE` - Temperature for orchestrator
+
+**Specialized AWS Service Agents:**
+- `SHERLOCK_LAMBDA_MODEL_ID` / `SHERLOCK_LAMBDA_TEMPERATURE`
+- `SHERLOCK_APIGATEWAY_MODEL_ID` / `SHERLOCK_APIGATEWAY_TEMPERATURE`
+- `SHERLOCK_STEPFUNCTIONS_MODEL_ID` / `SHERLOCK_STEPFUNCTIONS_TEMPERATURE`
+- `SHERLOCK_IAM_MODEL_ID` / `SHERLOCK_IAM_TEMPERATURE`
+- `SHERLOCK_DYNAMODB_MODEL_ID` / `SHERLOCK_DYNAMODB_TEMPERATURE`
+- `SHERLOCK_S3_MODEL_ID` / `SHERLOCK_S3_TEMPERATURE`
+- `SHERLOCK_SQS_MODEL_ID` / `SHERLOCK_SQS_TEMPERATURE`
+- `SHERLOCK_SNS_MODEL_ID` / `SHERLOCK_SNS_TEMPERATURE`
+- `SHERLOCK_EVENTBRIDGE_MODEL_ID` / `SHERLOCK_EVENTBRIDGE_TEMPERATURE`
+- `SHERLOCK_VPC_MODEL_ID` / `SHERLOCK_VPC_TEMPERATURE`
+
+**Analysis Agents:**
+- `SHERLOCK_HYPOTHESIS_MODEL_ID` / `SHERLOCK_HYPOTHESIS_TEMPERATURE`
+- `SHERLOCK_ROOT_CAUSE_MODEL_ID` / `SHERLOCK_ROOT_CAUSE_TEMPERATURE`
+
+**Synthesis Model:**
+- `SHERLOCK_SYNTHESIS_TEMPERATURE` - Temperature for conservative analysis
+
+#### Configuration Precedence
+
+1. **Agent-specific** environment variables (e.g., `SHERLOCK_LAMBDA_MODEL_ID`)
+2. **Category-specific** environment variables (e.g., `SHERLOCK_SPECIALIST_MODEL_ID`)
+3. **Global** environment variables (`BEDROCK_MODEL_ID`, `SHERLOCK_TEMPERATURE`)
+4. **Hardcoded** defaults
+
+#### Example Configurations
+
+**Example 1: Category-Level Configuration (Simplest)**
+```bash
+# Configure entire categories with single settings
+SHERLOCK_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+SHERLOCK_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+SHERLOCK_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+```
+
+**Example 2: Mixed Category and Agent-Specific**
+```bash
+# All specialists use Haiku, except Lambda uses Sonnet
+SHERLOCK_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+SHERLOCK_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+SHERLOCK_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+```
+
+**Example 3: Fine-Grained Control (Most Specific)**
+```bash
+# Override specific agents as needed
+SHERLOCK_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
+SHERLOCK_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+SHERLOCK_APIGATEWAY_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+SHERLOCK_HYPOTHESIS_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+SHERLOCK_ROOT_CAUSE_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+```
+
+### AWS Configuration
 - `AWS_REGION` - Primary AWS region setting
 - `AWS_DEFAULT_REGION` - Fallback AWS region setting
 

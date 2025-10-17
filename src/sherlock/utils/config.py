@@ -102,6 +102,246 @@ def create_synthesis_model() -> BedrockModel:
     return create_bedrock_model(temperature_override=synthesis_temp)
 
 
+def create_orchestrator_model() -> BedrockModel:
+    """
+    Create a model for the lead orchestrator agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for orchestrator
+    """
+    model_id = os.getenv("SHERLOCK_ORCHESTRATOR_MODEL_ID") or os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0")
+    temperature = float(os.getenv("SHERLOCK_ORCHESTRATOR_TEMPERATURE") or os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_lambda_agent_model() -> BedrockModel:
+    """
+    Create a model for the Lambda specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for Lambda agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_LAMBDA_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_LAMBDA_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_apigateway_agent_model() -> BedrockModel:
+    """
+    Create a model for the API Gateway specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for API Gateway agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_APIGATEWAY_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_APIGATEWAY_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_stepfunctions_agent_model() -> BedrockModel:
+    """
+    Create a model for the Step Functions specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for Step Functions agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_STEPFUNCTIONS_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_STEPFUNCTIONS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_iam_agent_model() -> BedrockModel:
+    """
+    Create a model for the IAM specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for IAM agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_IAM_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_IAM_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_dynamodb_agent_model() -> BedrockModel:
+    """
+    Create a model for the DynamoDB specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for DynamoDB agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_DYNAMODB_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_DYNAMODB_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_s3_agent_model() -> BedrockModel:
+    """
+    Create a model for the S3 specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for S3 agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_S3_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_S3_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_sqs_agent_model() -> BedrockModel:
+    """
+    Create a model for the SQS specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for SQS agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_SQS_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_SQS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_sns_agent_model() -> BedrockModel:
+    """
+    Create a model for the SNS specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for SNS agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_SNS_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_SNS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_eventbridge_agent_model() -> BedrockModel:
+    """
+    Create a model for the EventBridge specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for EventBridge agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_EVENTBRIDGE_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_EVENTBRIDGE_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_vpc_agent_model() -> BedrockModel:
+    """
+    Create a model for the VPC specialist agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for VPC agent
+    """
+    # Hierarchical configuration: Agent-specific -> Specialist category -> Global default
+    model_id = (os.getenv("SHERLOCK_VPC_MODEL_ID") or 
+                os.getenv("SHERLOCK_SPECIALIST_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_VPC_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_SPECIALIST_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_hypothesis_agent_model() -> BedrockModel:
+    """
+    Create a model for the hypothesis generation agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for hypothesis agent
+    """
+    # Hierarchical configuration: Agent-specific -> Analysis category -> Global default
+    model_id = (os.getenv("SHERLOCK_HYPOTHESIS_MODEL_ID") or 
+                os.getenv("SHERLOCK_ANALYSIS_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_HYPOTHESIS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_ANALYSIS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
+def create_root_cause_agent_model() -> BedrockModel:
+    """
+    Create a model for the root cause analysis agent.
+    
+    Returns:
+        BedrockModel: Configured Bedrock model for root cause agent
+    """
+    # Hierarchical configuration: Agent-specific -> Analysis category -> Global default
+    model_id = (os.getenv("SHERLOCK_ROOT_CAUSE_MODEL_ID") or 
+                os.getenv("SHERLOCK_ANALYSIS_MODEL_ID") or 
+                os.getenv("BEDROCK_MODEL_ID", "openai.gpt-oss-120b-1:0"))
+    
+    temperature = float(os.getenv("SHERLOCK_ROOT_CAUSE_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_ANALYSIS_TEMPERATURE") or 
+                       os.getenv("SHERLOCK_TEMPERATURE", "0.7"))
+    
+    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+
+
 
 
 

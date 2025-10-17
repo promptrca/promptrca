@@ -29,16 +29,16 @@ from strands import Agent
 
 from .core import SherlockInvestigator
 from .agents.lead_orchestrator import LeadOrchestratorAgent
-from .utils.config import get_region, create_bedrock_model
+from .utils.config import get_region, create_orchestrator_model
 from .utils import get_logger
 
 logger = get_logger(__name__)
 
-# Configure Bedrock model - initialized once, reused across invocations
+# Configure orchestrator model - initialized once, reused across invocations
 # In Lambda, this happens during cold start and is reused for warm invocations
-bedrock_model = create_bedrock_model()
+orchestrator_model = create_orchestrator_model()
 
-agent = Agent(model=bedrock_model)
+agent = Agent(model=orchestrator_model)
 
 
 def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -97,7 +97,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             region=region,
             xray_trace_id=xray_trace_id,
             investigation_target=investigation_target,
-            strands_agent=bedrock_model
+            strands_agent=orchestrator_model
         )
 
         # Run investigation (async)
