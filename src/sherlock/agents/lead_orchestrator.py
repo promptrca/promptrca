@@ -54,7 +54,9 @@ from ..tools import (
     get_stepfunctions_logs,
     search_aws_documentation,
     read_aws_documentation,
-    get_aws_documentation_recommendations
+    get_aws_documentation_recommendations,
+    aws_mcp_read,
+    aws_mcp_suggest_commands
 )
 
 logger = get_logger(__name__)
@@ -135,7 +137,8 @@ INVESTIGATION FLOW:
 2. From trace/context, identify AWS services involved
 3. Call appropriate specialist agent for each service (call ONCE per service)
 4. Use AWS Knowledge tools to get official documentation and best practices when relevant
-5. Return all findings - let downstream agents synthesize
+5. Use AWS MCP fallback for uncommon services not covered by native tools
+6. Return all findings - let downstream agents synthesize
 
 AVAILABLE SPECIALISTS:
 - investigate_lambda_function(function_name, context)
@@ -154,10 +157,22 @@ AWS KNOWLEDGE TOOLS (use when relevant):
 - read_aws_documentation(url) - Read specific AWS documentation page
 - get_aws_documentation_recommendations(topic) - Get related AWS guidance
 
+AWS MCP FALLBACK TOOLS (use ONLY when no native tool exists):
+- aws_mcp_read(service, operation, parameters_json, region?, query?) - Execute AWS CLI read operations
+- aws_mcp_suggest_commands(query) - Get AWS CLI command suggestions
+
+AWS MCP FALLBACK RULES:
+- Use ONLY for uncommon services: AWS Backup, Config, SSO, Organizations, etc.
+- NEVER use for: Lambda, API Gateway, S3, DynamoDB, IAM, Step Functions (use native tools)
+- Always prefer native tools when available
+- Apply JMESPath query to reduce output size when possible
+- Use aws_mcp_suggest_commands to discover appropriate operations
+
 RULES:
 - Call specialists for services explicitly mentioned OR discovered in X-Ray trace
 - Provide context to specialists (error messages, trace findings)
 - Use AWS Knowledge tools to enhance findings with official documentation
+- Use MCP fallback only for services not covered by native tools
 - Do NOT generate hypotheses yourself - specialists will do that
 - Do NOT speculate about services not observed
 - Be concise
@@ -181,6 +196,9 @@ OUTPUT: Relay specialist findings with AWS documentation context when relevant""
                 search_aws_documentation,
                 read_aws_documentation,
                 get_aws_documentation_recommendations,
+                # AWS API MCP fallback tools
+                aws_mcp_read,
+                aws_mcp_suggest_commands,
                 # Specialist agent tools
                 self.lambda_tool,
                 self.apigateway_tool,

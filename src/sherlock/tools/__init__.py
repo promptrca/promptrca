@@ -129,6 +129,12 @@ from .aws_knowledge_tools import (
     get_service_regional_availability
 )
 
+# AWS API MCP fallback tools (optional)
+from .aws_mcp_tools import (
+    aws_mcp_read,
+    aws_mcp_suggest_commands
+)
+
 __all__ = [
     # Lambda tools
     'get_lambda_config',
@@ -211,6 +217,10 @@ __all__ = [
     'read_aws_documentation',
     'get_aws_documentation_recommendations',
     'list_aws_regions',
-    'get_service_regional_availability'
+    'get_service_regional_availability',
+    
+    # AWS API MCP fallback tools
+    'aws_mcp_read',
+    'aws_mcp_suggest_commands'
 ]
 

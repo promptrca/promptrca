@@ -11,12 +11,16 @@ services:
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
       - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
+      - AWS_MCP_SERVER_URL=http://aws-mcp-server:8000/mcp
+      - ENABLE_AWS_MCP_FALLBACK=${ENABLE_AWS_MCP_FALLBACK:-false}
     ports:
       - "8080:8080"
     networks:
       - sherlock-network
     volumes:
       - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
+    depends_on:
+      - aws-mcp-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
       interval: 30s
@@ -27,6 +31,38 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+
+  aws-mcp-server:
+    image: public.ecr.aws/awslabs-mcp/awslabs/aws-api-mcp-server:latest
+    container_name: sherlock-aws-mcp
+    environment:
+      - AWS_REGION=${AWS_REGION:-eu-west-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - READ_OPERATIONS_ONLY=true
+      - AWS_API_MCP_TRANSPORT=streamable-http
+      - AUTH_TYPE=no-auth
+      - AWS_API_MCP_HOST=0.0.0.0
+      - AWS_API_MCP_PORT=8000
+      - AWS_API_MCP_ALLOW_UNRESTRICTED_LOCAL_FILE_ACCESS=false
+      - REQUIRE_MUTATION_CONSENT=true
+    ports:
+      - "8000:8000"
+    networks:
+      - sherlock-network
+    volumes:
+      - ~/.aws:/root/.aws:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
 
   sherlock-lambda:
     build:

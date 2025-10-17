@@ -369,6 +369,31 @@ def get_mcp_config() -> Dict[str, Any]:
     }
 
 
+def get_aws_mcp_config() -> Dict[str, Any]:
+    """
+    Get AWS API MCP fallback configuration from environment variables.
+    
+    Environment Variables:
+    - ENABLE_AWS_MCP_FALLBACK: Enable/disable MCP fallback (default: false)
+    - AWS_MCP_SERVER_URL: MCP server URL (default: http://localhost:8000/mcp)
+    - AWS_MCP_TIMEOUT: Request timeout in seconds (default: 30)
+    - AWS_MCP_MAX_OUTPUT_BYTES: Max output size in bytes (default: 10485760)
+    - AWS_MCP_MAX_LIST_PAGES: Max pagination pages (default: 10)
+    - AWS_MCP_ALLOWED_SERVICES: Comma-separated service list (default: backup,config,sso)
+    
+    Returns:
+        Dict[str, Any]: MCP fallback configuration dictionary
+    """
+    return {
+        "enabled": os.getenv("ENABLE_AWS_MCP_FALLBACK", "false").lower() == "true",
+        "server_url": os.getenv("AWS_MCP_SERVER_URL", "http://localhost:8000/mcp"),
+        "timeout": int(os.getenv("AWS_MCP_TIMEOUT", "30")),
+        "max_output_bytes": int(os.getenv("AWS_MCP_MAX_OUTPUT_BYTES", "10485760")),  # 10MB
+        "max_list_pages": int(os.getenv("AWS_MCP_MAX_LIST_PAGES", "10")),
+        "allowed_services": os.getenv("AWS_MCP_ALLOWED_SERVICES", "backup,config,sso,organizations").split(",")
+    }
+
+
 def get_environment_info() -> Dict[str, str]:
     """
     Get information about current environment configuration.
@@ -384,4 +409,5 @@ def get_environment_info() -> Dict[str, str]:
         "aws_region": os.getenv("AWS_REGION", "not set"),
         "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set"),
         "mcp_enabled": str(get_mcp_config()["enabled"]),
+        "mcp_fallback_enabled": str(get_aws_mcp_config()["enabled"]),
     }

@@ -311,6 +311,33 @@ Sherlock can integrate with the AWS Knowledge MCP Server to provide enhanced adv
 
 - **Zero impact** when disabled - investigations work normally
 
+### AWS API MCP Fallback (Optional)
+
+Sherlock can use AWS API MCP Server as a fallback for investigating uncommon AWS services not yet covered by native boto3 tools.
+
+**Environment Variables:**
+- `ENABLE_AWS_MCP_FALLBACK` - Enable/disable MCP fallback (default: false)
+- `AWS_MCP_SERVER_URL` - MCP server URL (default: http://aws-mcp-server:8000/mcp)
+- `AWS_MCP_TIMEOUT` - Request timeout in seconds (default: 30)
+- `AWS_MCP_MAX_OUTPUT_BYTES` - Max output size (default: 10MB)
+- `AWS_MCP_ALLOWED_SERVICES` - Comma-separated service list
+
+**Supported Services:**
+- AWS Backup, Config, SSO, Organizations
+- Services not yet covered by native boto3 tools
+
+**Performance:**
+- Primary tools (boto3): ~100ms
+- MCP fallback: ~500-1000ms (acceptable for uncommon services)
+
+**Security:**
+- Read-only operations only
+- Service allowlist enforcement
+- Output size limits
+- Timeout protection
+
+**Note:** This is an optional fallback. Sherlock uses native boto3 tools first, falling back to MCP only for uncovered services.
+
 ### Example Configuration
 ```bash
 # Use a different model
@@ -323,6 +350,10 @@ export AWS_REGION="us-east-1"
 # Enable AWS Knowledge MCP (optional - disabled by default)
 export ENABLE_AWS_KNOWLEDGE_MCP="true"
 export AWS_KNOWLEDGE_MCP_TIMEOUT="5"
+
+# Enable AWS API MCP Fallback (optional - disabled by default)
+export ENABLE_AWS_MCP_FALLBACK="true"
+export AWS_MCP_TIMEOUT="30"
 
 # Run with custom configuration
 make run-with-aws
