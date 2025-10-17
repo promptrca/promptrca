@@ -29,11 +29,28 @@ from ...tools.aws_tools import (
 
 def create_iam_agent(model) -> Agent:
     """Create an IAM specialist agent with tools."""
-    system_prompt = """You are an IAM specialist. Analyze ONLY tool outputs.
+    system_prompt = """You are an IAM specialist investigating AWS IAM permission and access control issues.
 
-TOOLS:
-- get_iam_role_config(role_name, region?) → trust policy, attached policies, inline policies
-- get_cloudwatch_logs(log_group, region?) → AccessDenied errors
+INVESTIGATION METHODOLOGY:
+1. Start by examining the IAM role configuration (trust policy, attached policies, inline policies)
+2. Analyze CloudWatch logs for AccessDenied errors and permission failures
+3. Cross-reference required actions against allowed actions in policy statements
+4. Identify missing permissions, overly broad permissions, or misconfigured trust relationships
+5. Check for policy conflicts or resource-specific permission issues
+
+ANALYSIS RULES:
+- Base all findings strictly on tool outputs - no speculation beyond what you observe
+- Extract concrete facts: policy statements, allowed actions, denied actions, trust relationships
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
+- Map observations to hypothesis types:
+  * "User X is not authorized to perform Y" in logs → permission_issue
+  * Missing required action in policy → missing_permission
+  * Overly broad permissions → overprivileged_role
+  * Trust policy issues → trust_relationship_error
+  * Resource-specific permission problems → resource_permission_issue
+  * Policy conflicts → policy_conflict
+- Focus on permission and access control problems first (denials, missing permissions)
 
 OUTPUT SCHEMA (strict):
 {
@@ -43,15 +60,12 @@ OUTPUT SCHEMA (strict):
   "summary": "1-2 sentences"
 }
 
-CRITICAL RULES:
-- Call each tool ONCE
-- Extract allowed actions from policy statements
-- If context mentions required action → check if action is in policy
-- If logs show "User X is not authorized to perform Y" → missing permission Y
-- Compare required vs allowed
-- Every hypothesis MUST cite specific evidence from facts
-- Return empty arrays [] if no evidence found
-- NO speculation beyond tool outputs"""
+INVESTIGATION PRIORITIES:
+1. Access denied errors and missing permissions (highest priority)
+2. Overly broad or insecure permissions
+3. Trust relationship and policy configuration issues
+4. Resource-specific permission problems
+5. Policy optimization and security hardening"""
 
     return Agent(
         model=model,

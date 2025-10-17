@@ -30,15 +30,58 @@ from ..utils.config import get_region
 def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = None) -> str:
     region = region or get_region()
     """
-    Get API Gateway stage configuration including integration details (Lambda, Step Functions, etc.).
-
+    Retrieve comprehensive API Gateway stage configuration for integration and routing analysis.
+    
+    This tool fetches all critical stage settings needed to diagnose API Gateway issues:
+    - Integration configurations (Lambda, Step Functions, HTTP endpoints)
+    - IAM roles and credentials used for integrations
+    - Caching and performance settings
+    - X-Ray tracing configuration
+    - Method settings and throttling
+    - Stage variables and deployment details
+    
     Args:
-        api_id: The API Gateway REST API ID
-        stage_name: The stage name (e.g., 'test', 'prod')
-        region: AWS region (default: from environment)
-
+        api_id: The API Gateway REST API ID (e.g., "abc123xyz", "142gh05m9a")
+        stage_name: The stage name (e.g., "test", "prod", "dev")
+        region: AWS region (default: from environment config)
+    
     Returns:
-        JSON string with stage configuration and integration details
+        JSON string containing:
+        - api_id: REST API ID
+        - stage_name: Stage name
+        - deployment_id: Current deployment ID
+        - xray_tracing_enabled: Whether X-Ray tracing is enabled
+        - cache_cluster_enabled: Whether caching is enabled
+        - cache_cluster_size: Cache cluster size if enabled
+        - method_settings: Method-level settings and throttling
+        - variables: Stage variables
+        - integrations: Array of integration details:
+          - resource_path: API resource path (e.g., "/users", "/orders")
+          - http_method: HTTP method (GET, POST, PUT, DELETE, etc.)
+          - integration_type: Type of integration (AWS_PROXY, AWS, HTTP, etc.)
+          - integration_uri: Target service URI
+          - target_service: Parsed target service (Lambda, Step Functions, HTTP)
+          - credentials_role: IAM role used for integration
+        - created_date: When the stage was created
+        - last_updated_date: When the stage was last updated
+    
+    Common Integration Issues:
+        - Wrong integration type: Mismatch between expected and actual integration
+        - Missing IAM permissions: Integration role lacks required permissions
+        - Incorrect URI: Integration points to wrong service or function
+        - Missing credentials: Integration lacks proper IAM role
+        - CORS issues: Missing or misconfigured CORS settings
+        - Throttling: Method-level throttling causing 429 errors
+    
+    Use Cases:
+        - Integration debugging (verify backend service connections)
+        - Permission analysis (check IAM role configurations)
+        - Routing issues (verify resource paths and methods)
+        - Performance optimization (check caching and throttling settings)
+        - Security auditing (review integration credentials and permissions)
+        - CORS troubleshooting (verify cross-origin resource sharing setup)
+    
+    Note: This tool examines the current stage configuration, not historical changes.
     """
     import boto3
 
@@ -117,16 +160,47 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = Non
 def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
-    Get CloudWatch logs for an API Gateway.
+    Retrieve CloudWatch logs for API Gateway request/response analysis and error debugging.
+    
+    This tool fetches execution logs from API Gateway to identify request patterns,
+    error responses, integration failures, and performance issues. Essential for
+    diagnosing API Gateway routing, integration, and client-side problems.
     
     Args:
-        api_id: The API Gateway REST API ID
-        stage_name: The stage name (e.g., 'test', 'prod')
-        hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
+        api_id: The API Gateway REST API ID (e.g., "abc123xyz", "142gh05m9a")
+        stage_name: The stage name (e.g., "test", "prod", "dev")
+        hours_back: Number of hours to look back for logs (default: 1, max recommended: 24)
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with API Gateway log events
+        JSON string containing:
+        - api_id: REST API ID
+        - stage_name: Stage name
+        - log_group: CloudWatch log group path
+        - hours_back: Time range searched
+        - event_count: Number of log events found
+        - events: Array of log events with:
+          - timestamp: Unix timestamp in milliseconds
+          - message: Log message content (request/response details, errors)
+    
+    Common Log Patterns to Look For:
+        - HTTP status codes: 4xx (client errors), 5xx (server errors)
+        - Integration errors: Backend service failures or timeouts
+        - Authentication errors: Invalid API keys or IAM permissions
+        - Throttling: 429 Too Many Requests responses
+        - CORS errors: Cross-origin request failures
+        - Request validation: Malformed requests or missing parameters
+        - Response transformation: Integration response mapping issues
+    
+    Use Cases:
+        - Request/response debugging (analyze API call patterns)
+        - Error investigation (identify 4xx/5xx error causes)
+        - Integration troubleshooting (check backend service calls)
+        - Performance analysis (analyze request latency and patterns)
+        - Security auditing (review authentication and authorization)
+        - Client debugging (help developers understand API behavior)
+    
+    Note: Logs are retrieved from the most recent log streams to ensure relevance.
     """
     import boto3
     from datetime import datetime, timedelta
