@@ -110,6 +110,12 @@ class InvestigationReport:
     timeline: List['EventTimeline']
     
     summary: str
+    
+    # New: Token Usage Tracking
+    token_usage: Optional[Dict[str, Any]] = None
+    
+    # New: Cost Analysis
+    cost_analysis: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to structured JSON following industry standards."""
@@ -151,6 +157,26 @@ class InvestigationReport:
             "remediation": {
                 "count": len(self.advice),
                 "recommendations": [a.to_dict() for a in self.advice]
+            },
+            "token_usage": self.token_usage or {
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+                "total_tokens": 0,
+                "by_model": {},
+                "by_agent": {}
+            },
+            "cost_analysis": self.cost_analysis or {
+                "total_cost": 0.0,
+                "currency": "USD",
+                "by_model": {},
+                "by_agent": {},
+                "summary": {
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                    "total_tokens": 0,
+                    "total_cost": 0.0,
+                    "pricing_type": "standard"
+                }
             },
             "summary": json.loads(self.summary) if isinstance(self.summary, str) and self.summary.startswith('{') else self.summary
         }

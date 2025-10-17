@@ -29,16 +29,16 @@ from strands import Agent
 
 from .core import SherlockInvestigator
 from .agents.lead_orchestrator import LeadOrchestratorAgent
-from .utils.config import get_region, create_bedrock_model
+from .utils.config import get_region, create_orchestrator_model
 from .utils import get_logger
 
 logger = get_logger(__name__)
 
-# Configure Bedrock model - initialized once, reused across invocations
+# Configure orchestrator model - initialized once, reused across invocations
 # In Lambda, this happens during cold start and is reused for warm invocations
-bedrock_model = create_bedrock_model()
+orchestrator_model = create_orchestrator_model()
 
-agent = Agent(model=bedrock_model)
+agent = Agent(model=orchestrator_model)
 
 
 def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -97,7 +97,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             region=region,
             xray_trace_id=xray_trace_id,
             investigation_target=investigation_target,
-            strands_agent=bedrock_model
+            strands_agent=orchestrator_model
         )
 
         # Run investigation (async)
@@ -106,6 +106,26 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         # Convert to structured response
         response = report.to_dict()
 
+        # Log token usage and cost summary
+        if report.token_usage:
+            from .utils.pricing import calculate_investigation_cost, format_cost_report
+            
+            logger.info(f"📊 Token Usage Summary:")
+            logger.info(f"   Total tokens: {report.token_usage.get('total_tokens', 0)}")
+            logger.info(f"   Input tokens: {report.token_usage.get('total_input_tokens', 0)}")
+            logger.info(f"   Output tokens: {report.token_usage.get('total_output_tokens', 0)}")
+            logger.info(f"   By model: {report.token_usage.get('by_model', {})}")
+            logger.info(f"   By agent: {report.token_usage.get('by_agent', {})}")
+            
+            # Calculate and log cost information
+            cost_data = calculate_investigation_cost(report.token_usage)
+            logger.info(f"💰 Investigation Cost: ${cost_data['summary']['total_cost']:.6f} USD")
+            logger.info(f"   Standard pricing: ${cost_data['summary']['total_cost']:.6f} USD")
+            
+            # Also calculate batch pricing for comparison
+            batch_cost_data = calculate_investigation_cost(report.token_usage, use_batch_pricing=True)
+            logger.info(f"   Batch pricing: ${batch_cost_data['summary']['total_cost']:.6f} USD")
+            logger.info(f"   Potential savings: ${cost_data['summary']['total_cost'] - batch_cost_data['summary']['total_cost']:.6f} USD")
 
         # Add investigation metadata
         response["investigation"]["region"] = region

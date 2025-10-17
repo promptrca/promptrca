@@ -96,6 +96,13 @@ Please analyze this Lambda function for any issues, errors, or problems. Start b
             # Run the agent
             agent_result = lambda_agent(prompt)
             
+            # Record token usage
+            from ...utils.token_tracker import get_current_tracker, extract_model_id_from_bedrock_model
+            token_tracker = get_current_tracker()
+            if token_tracker and hasattr(agent_result, 'metrics'):
+                model_id = extract_model_id_from_bedrock_model(lambda_agent.model)
+                token_tracker.record_agent_invocation("lambda_agent", model_id, agent_result.metrics)
+            
             # Extract the response content from AgentResult
             response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
 
