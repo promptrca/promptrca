@@ -31,20 +31,23 @@ logger = get_logger(__name__)
 class BaseAWSClient:
     """Base AWS client with common functionality."""
 
-    def __init__(self, region: str = "eu-west-1"):
-        """Initialize base AWS client with region."""
+    def __init__(self, region: str = "eu-west-1", session: Optional[boto3.Session] = None):
+        """
+        Initialize base AWS client with optional shared session.
+        
+        Args:
+            region: AWS region
+            session: Optional pre-created boto3 session. If not provided, creates a new one.
+        """
         self.region = region
-        self._session = None
+        self._session = session if session else boto3.Session(region_name=self.region)
         self.account_id = None
         self.user_arn = None
-        self._initialize_session()
+        self._initialize_identity()
     
-    def _initialize_session(self):
-        """Initialize AWS session using boto3's default credential chain."""
+    def _initialize_identity(self):
+        """Get AWS account identity using the session."""
         try:
-            # Use boto3's default credential chain (environment variables, IAM roles, etc.)
-            self._session = boto3.Session(region_name=self.region)
-            
             # Test credentials by getting caller identity
             sts_client = self._session.client('sts', region_name=self.region)
             identity = sts_client.get_caller_identity()
@@ -53,12 +56,12 @@ class BaseAWSClient:
             self.account_id = identity['Account']
             self.user_arn = identity['Arn']
             
-            logger.info(f"✅ AWS clients initialized for region: {self.region}")
+            logger.info(f"✅ AWS client initialized for region: {self.region}")
             logger.info(f"🔐 Authenticated as: {self.user_arn}")
             logger.info(f"🏢 Account: {self.account_id}")
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize AWS clients: {e}")
+            logger.error(f"❌ Failed to get AWS identity: {e}")
             raise
 
     def get_client(self, service_name: str):

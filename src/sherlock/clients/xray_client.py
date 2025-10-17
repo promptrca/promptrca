@@ -20,6 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
 from typing import Dict, Any, List, Optional
 from botocore.exceptions import ClientError
 from ..models import Fact
@@ -32,9 +33,9 @@ logger = get_logger(__name__)
 class XRayClient(BaseAWSClient):
     """X-Ray-specific AWS client."""
 
-    def __init__(self, region: str = "eu-west-1"):
-        """Initialize X-Ray client."""
-        super().__init__(region)
+    def __init__(self, region: str = "eu-west-1", session: Optional[boto3.Session] = None):
+        """Initialize X-Ray client with optional shared session."""
+        super().__init__(region, session=session)
         self._xray_client = self.get_client('xray')
 
     def get_xray_trace(self, trace_id: str) -> List[Fact]:

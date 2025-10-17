@@ -20,6 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -34,9 +35,9 @@ logger = get_logger(__name__)
 class LambdaClient(BaseAWSClient):
     """Lambda-specific AWS client."""
 
-    def __init__(self, region: str = "eu-west-1"):
-        """Initialize Lambda client."""
-        super().__init__(region)
+    def __init__(self, region: str = "eu-west-1", session: Optional[boto3.Session] = None):
+        """Initialize Lambda client with optional shared session."""
+        super().__init__(region, session=session)
         self._lambda_client = self.get_client('lambda')
         self._code_cache = {}  # Cache for Lambda function code
 

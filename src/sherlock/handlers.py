@@ -24,12 +24,15 @@ Used by both the AgentCore server and AWS Lambda deployments.
 
 import os
 import asyncio
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from strands import Agent
 
 from .core import SherlockInvestigator
 from .agents.lead_orchestrator import LeadOrchestratorAgent
 from .utils.config import get_region, create_bedrock_model
+from .utils import get_logger
+
+logger = get_logger(__name__)
 
 # Configure Bedrock model - initialized once, reused across invocations
 # In Lambda, this happens during cold start and is reused for warm invocations
@@ -48,6 +51,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             - investigation_inputs: Natural language description (new format)
             - function_name: Lambda function name (legacy)
             - investigation_target: Structured target specification
+            - assume_role_arn: Optional IAM role ARN to assume for cross-account access
 
     Returns:
         Investigation report as dictionary
@@ -55,13 +59,22 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # Extract parameters from payload
         region = payload.get("region", get_region())
+        assume_role_arn = payload.get("assume_role_arn")
+        external_id = payload.get("external_id")
+        
+        # Debug logging for role assumption
+        logger.info(f"🔍 [DEBUG] Extracted assume_role_arn: {assume_role_arn}")
+        logger.info(f"🔍 [DEBUG] Extracted external_id: {external_id}")
+        logger.info(f"🔍 [DEBUG] Full payload keys: {list(payload.keys())}")
 
         # Check for free text input (primary method)
         if "free_text_input" in payload:
             return _handle_free_text_investigation(
                 payload["free_text_input"],
                 region,
-                agent
+                agent,
+                assume_role_arn,
+                external_id
             )
 
         # Check for new investigation_inputs format
@@ -69,7 +82,9 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             return _handle_investigation_inputs(
                 payload["investigation_inputs"],
                 region,
-                agent
+                agent,
+                assume_role_arn,
+                external_id
             )
 
         # Fallback to legacy structured input
@@ -109,7 +124,9 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _handle_free_text_investigation(
     free_text: str,
     region: str,
-    strands_agent: Agent
+    strands_agent: Agent,
+    assume_role_arn: Optional[str] = None,
+    external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle free text investigation using multi-agent orchestration."""
     try:
@@ -124,7 +141,7 @@ def _handle_free_text_investigation(
         }
 
         # Run multi-agent investigation (async)
-        report = asyncio.run(orchestrator.investigate(inputs, region))
+        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
         response = report.to_dict()
@@ -146,7 +163,9 @@ def _handle_free_text_investigation(
 def _handle_investigation_inputs(
     investigation_inputs: str,
     region: str,
-    strands_agent: Agent
+    strands_agent: Agent,
+    assume_role_arn: Optional[str] = None,
+    external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle investigation_inputs using multi-agent orchestration."""
     try:
@@ -161,7 +180,7 @@ def _handle_investigation_inputs(
         }
 
         # Run multi-agent investigation (async)
-        report = asyncio.run(orchestrator.investigate(inputs, region))
+        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
         response = report.to_dict()

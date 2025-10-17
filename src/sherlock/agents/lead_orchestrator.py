@@ -103,16 +103,17 @@ class LeadOrchestratorAgent:
         from .input_parser_agent import InputParserAgent
         self.input_parser = InputParserAgent()
         
-        # Initialize root cause agent for synthesis
-        from .root_cause_agent import RootCauseAgent
-        from ..clients.aws_client import AWSClient
+        # Initialize synthesis model for root cause analysis
         from strands import Agent
         from ..utils.config import create_synthesis_model
-        aws_client = AWSClient(region=self.region)
+        # AWSClient will be created per investigation with the appropriate role
+        self.region = region
         # Use synthesis model for conservative root cause analysis
         synthesis_model = create_synthesis_model()
         strands_agent = Agent(model=synthesis_model)
-        self.root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=strands_agent)
+        # Root cause agent will be initialized per investigation
+        self.synthesis_model = synthesis_model
+        self.strands_agent = strands_agent
         
         
         # Create the lead orchestrator agent with all specialist tools
@@ -178,10 +179,12 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             ]
         )
     
-    async def investigate(self, inputs: Dict[str, Any], region: str = None) -> InvestigationReport:
+    async def investigate(self, inputs: Dict[str, Any], region: str = None, assume_role_arn: Optional[str] = None, external_id: Optional[str] = None) -> InvestigationReport:
         """Run multi-agent investigation using the lead orchestrator."""
         region = region or get_region()
         logger.info("🔍 Starting multi-agent investigation...")
+        logger.info(f"🔍 [DEBUG] LeadOrchestrator received assume_role_arn: {assume_role_arn}")
+        logger.info(f"🔍 [DEBUG] LeadOrchestrator received external_id: {external_id}")
 
         # Generate investigation ID
         import time
@@ -217,7 +220,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
 
             # 7. Generate investigation report
-            report = self._generate_investigation_report(context, facts, hypotheses, advice, region)
+            report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
 
 
             return report
@@ -631,7 +634,7 @@ OUTPUT: Relay specialist findings without additional interpretation"""
             })
         )
     
-    def _generate_investigation_report(self, context: InvestigationContext, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], region: str) -> InvestigationReport:
+    def _generate_investigation_report(self, context: InvestigationContext, facts: List[Fact], hypotheses: List[Hypothesis], advice: List[Advice], region: str, assume_role_arn: Optional[str] = None, external_id: Optional[str] = None) -> InvestigationReport:
         """Generate investigation report from multi-agent findings."""
         logger.info("📋 Generating investigation report...")
         
@@ -650,8 +653,14 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 metadata={"region": region, "source": "multi_agent"}
             ))
         
+        # Create root cause agent with proper AWS client for this investigation
+        from .root_cause_agent import RootCauseAgent
+        from ..clients.aws_client import AWSClient
+        aws_client = AWSClient(region=region, role_arn=assume_role_arn, external_id=external_id)
+        root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=self.strands_agent)
+        
         # Use root cause agent to analyze and synthesize findings
-        root_cause = self.root_cause_agent.analyze_root_cause(hypotheses, facts)
+        root_cause = root_cause_agent.analyze_root_cause(hypotheses, facts)
         
         # Create severity assessment
         severity = SeverityAssessment(

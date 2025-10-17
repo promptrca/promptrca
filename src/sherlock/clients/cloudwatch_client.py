@@ -20,6 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -34,9 +35,9 @@ logger = get_logger(__name__)
 class CloudWatchClient(BaseAWSClient):
     """CloudWatch-specific AWS client."""
 
-    def __init__(self, region: str = "eu-west-1"):
-        """Initialize CloudWatch client."""
-        super().__init__(region)
+    def __init__(self, region: str = "eu-west-1", session: Optional[boto3.Session] = None):
+        """Initialize CloudWatch client with optional shared session."""
+        super().__init__(region, session=session)
         self._cloudwatch_client = self.get_client('cloudwatch')
         self._logs_client = self.get_client('logs')
 
