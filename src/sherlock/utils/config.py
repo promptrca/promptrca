@@ -348,6 +348,27 @@ def create_root_cause_agent_model() -> BedrockModel:
 
 
 
+def get_mcp_config() -> Dict[str, Any]:
+    """
+    Get AWS Knowledge MCP server configuration from environment variables.
+    
+    Environment Variables:
+    - ENABLE_AWS_KNOWLEDGE_MCP: Enable/disable MCP integration (default: true)
+    - AWS_KNOWLEDGE_MCP_URL: MCP server URL (default: https://knowledge-mcp.global.api.aws)
+    - AWS_KNOWLEDGE_MCP_TIMEOUT: Request timeout in seconds (default: 5)
+    - AWS_KNOWLEDGE_MCP_RETRIES: Max retry attempts (default: 2)
+    
+    Returns:
+        Dict[str, Any]: MCP configuration dictionary
+    """
+    return {
+        "enabled": os.getenv("ENABLE_AWS_KNOWLEDGE_MCP", "false").lower() == "true",
+        "server_url": os.getenv("AWS_KNOWLEDGE_MCP_URL", "https://knowledge-mcp.global.api.aws"),
+        "timeout": int(os.getenv("AWS_KNOWLEDGE_MCP_TIMEOUT", "5")),
+        "max_retries": int(os.getenv("AWS_KNOWLEDGE_MCP_RETRIES", "2"))
+    }
+
+
 def get_environment_info() -> Dict[str, str]:
     """
     Get information about current environment configuration.
@@ -362,4 +383,5 @@ def get_environment_info() -> Dict[str, str]:
         "max_tokens": os.getenv("SHERLOCK_MAX_TOKENS", "not set"),
         "aws_region": os.getenv("AWS_REGION", "not set"),
         "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set"),
+        "mcp_enabled": str(get_mcp_config()["enabled"]),
     }

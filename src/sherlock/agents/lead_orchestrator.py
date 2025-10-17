@@ -51,7 +51,10 @@ from ..tools import (
     get_iam_role_config,
     get_lambda_logs,
     get_apigateway_logs,
-    get_stepfunctions_logs
+    get_stepfunctions_logs,
+    search_aws_documentation,
+    read_aws_documentation,
+    get_aws_documentation_recommendations
 )
 
 logger = get_logger(__name__)
@@ -131,7 +134,8 @@ INVESTIGATION FLOW:
 1. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
 2. From trace/context, identify AWS services involved
 3. Call appropriate specialist agent for each service (call ONCE per service)
-4. Return all findings - let downstream agents synthesize
+4. Use AWS Knowledge tools to get official documentation and best practices when relevant
+5. Return all findings - let downstream agents synthesize
 
 AVAILABLE SPECIALISTS:
 - investigate_lambda_function(function_name, context)
@@ -145,14 +149,20 @@ AVAILABLE SPECIALISTS:
 - investigate_eventbridge_issue(issue_description)
 - investigate_vpc_issue(issue_description)
 
+AWS KNOWLEDGE TOOLS (use when relevant):
+- search_aws_documentation(query) - Search AWS docs for best practices
+- read_aws_documentation(url) - Read specific AWS documentation page
+- get_aws_documentation_recommendations(topic) - Get related AWS guidance
+
 RULES:
 - Call specialists for services explicitly mentioned OR discovered in X-Ray trace
 - Provide context to specialists (error messages, trace findings)
+- Use AWS Knowledge tools to enhance findings with official documentation
 - Do NOT generate hypotheses yourself - specialists will do that
 - Do NOT speculate about services not observed
 - Be concise
 
-OUTPUT: Relay specialist findings without additional interpretation"""
+OUTPUT: Relay specialist findings with AWS documentation context when relevant"""
 
         return Agent(
             model=self.model,
@@ -167,6 +177,10 @@ OUTPUT: Relay specialist findings without additional interpretation"""
                 get_lambda_logs,
                 get_apigateway_logs,
                 get_stepfunctions_logs,
+                # AWS Knowledge MCP tools
+                search_aws_documentation,
+                read_aws_documentation,
+                get_aws_documentation_recommendations,
                 # Specialist agent tools
                 self.lambda_tool,
                 self.apigateway_tool,
