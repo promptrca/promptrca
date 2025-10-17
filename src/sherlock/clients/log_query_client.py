@@ -20,6 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
 import time
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
@@ -33,12 +34,21 @@ logger = get_logger(__name__)
 class LogQueryClient:
     """Client for querying CloudWatch Logs using Logs Insights."""
 
-    def __init__(self, region: str = None):
-        """Initialize the log query client."""
+    def __init__(self, region: str = None, session: Optional[boto3.Session] = None):
+        """
+        Initialize the log query client with optional shared session.
+        
+        Args:
+            region: AWS region
+            session: Optional pre-created boto3 session. If not provided, creates a new one.
+        """
         self.region = region or get_region()
-        # Initialize logs client
-        import boto3
-        self.logs_client = boto3.client('logs', region_name=self.region)
+        # Use provided session or create new one
+        if session:
+            self.logs_client = session.client('logs', region_name=self.region)
+        else:
+            import boto3
+            self.logs_client = boto3.client('logs', region_name=self.region)
 
     def query_lambda_failed_invocations(
         self,

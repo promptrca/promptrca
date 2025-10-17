@@ -20,6 +20,7 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
 from typing import Dict, Any, List, Optional
 import json
 from botocore.exceptions import ClientError
@@ -33,9 +34,9 @@ logger = get_logger(__name__)
 class StepFunctionsClient(BaseAWSClient):
     """Step Functions-specific AWS client."""
 
-    def __init__(self, region: str = "eu-west-1"):
-        """Initialize Step Functions client."""
-        super().__init__(region)
+    def __init__(self, region: str = "eu-west-1", session: Optional[boto3.Session] = None):
+        """Initialize Step Functions client with optional shared session."""
+        super().__init__(region, session=session)
         self._stepfunctions_client = self.get_client('stepfunctions')
 
     def get_step_function_info(self, state_machine_name: str) -> List[Fact]:

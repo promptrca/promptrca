@@ -20,6 +20,8 @@ Contact: christiangenn99+sherlock@gmail.com
 
 """
 
+import boto3
+import os
 from typing import Dict, Any, List, Optional
 from ..models import Fact
 from ..utils import get_logger
@@ -37,22 +39,85 @@ logger = get_logger(__name__)
 class AWSClient:
     """Unified AWS client that delegates to specialized service clients."""
 
-    def __init__(self, region: str = None):
-        """Initialize unified AWS client with specialized service clients."""
+    def __init__(self, region: str = None, role_arn: Optional[str] = None, external_id: Optional[str] = None):
+        """
+        Initialize unified AWS client with optional role assumption.
+        
+        Args:
+            region: AWS region
+            role_arn: Optional IAM role ARN to assume for cross-account access
+            external_id: Optional external ID for cross-account role assumption
+        """
         self.region = region or get_region()
+        self.role_arn = role_arn
+        self.external_id = external_id
         
-        # Initialize specialized clients
-        self.lambda_client = LambdaClient(self.region)
-        self.cloudwatch_client = CloudWatchClient(self.region)
-        self.stepfunctions_client = StepFunctionsClient(self.region)
-        self.xray_client = XRayClient(self.region)
+        # Debug logging for role assumption
+        logger.info(f"🔍 [DEBUG] AWSClient.__init__ called with role_arn: {role_arn}, external_id: {external_id}")
         
-        # Initialize log query client
-        self.log_query_client = LogQueryClient(self.region)
+        # Create ONE session for all clients
+        self._session = self._create_session()
+        
+        # Initialize specialized clients with shared session
+        self.lambda_client = LambdaClient(self.region, session=self._session)
+        self.cloudwatch_client = CloudWatchClient(self.region, session=self._session)
+        self.stepfunctions_client = StepFunctionsClient(self.region, session=self._session)
+        self.xray_client = XRayClient(self.region, session=self._session)
+        
+        # Initialize log query client with shared session
+        self.log_query_client = LogQueryClient(self.region, session=self._session)
         
         # Expose account info from base client
         self.account_id = self.lambda_client.account_id
         self.user_arn = self.lambda_client.user_arn
+
+    def _create_session(self) -> boto3.Session:
+        """Create boto3 session with optional role assumption."""
+        logger.info(f"🔍 [DEBUG] _create_session called with role_arn: {self.role_arn}")
+        if self.role_arn:
+            logger.info(f"🔍 [DEBUG] Assuming role: {self.role_arn}")
+            return self._assume_role(self.role_arn)
+        logger.info(f"🔍 [DEBUG] Creating default session for region: {self.region}")
+        return boto3.Session(region_name=self.region)
+
+    def _assume_role(self, role_arn: str) -> boto3.Session:
+        """Assume an IAM role and return a session with temporary credentials."""
+        try:
+            logger.info(f"🔍 [DEBUG] Starting role assumption for: {role_arn}")
+            
+            # Create a temporary session to assume the role
+            temp_session = boto3.Session(region_name=self.region)
+            sts_client = temp_session.client('sts', region_name=self.region)
+            
+            # Prepare assume role parameters
+            assume_role_params = {
+                'RoleArn': role_arn,
+                'RoleSessionName': 'sherlock-investigation',
+                'DurationSeconds': 3600  # 1 hour
+            }
+            
+            # Add external ID if provided
+            if self.external_id:
+                assume_role_params['ExternalId'] = self.external_id
+                logger.info(f"🔍 [DEBUG] Using external ID: {self.external_id}")
+            
+            logger.info(f"🔍 [DEBUG] Calling STS AssumeRole API...")
+            response = sts_client.assume_role(**assume_role_params)
+            
+            credentials = response['Credentials']
+            logger.info(f"🔍 [DEBUG] Successfully assumed role, creating new session...")
+            
+            # Create new session with assumed role credentials
+            return boto3.Session(
+                aws_access_key_id=credentials['AccessKeyId'],
+                aws_secret_access_key=credentials['SecretAccessKey'],
+                aws_session_token=credentials['SessionToken'],
+                region_name=self.region
+            )
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to assume role {role_arn}: {e}")
+            raise
 
     # Lambda methods
     def get_lambda_function_info(self, function_name: str) -> List[Fact]:
