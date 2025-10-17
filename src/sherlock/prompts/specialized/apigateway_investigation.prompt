@@ -1,0 +1,5 @@
+Investigate API Gateway: {api_id} (stage: {stage_name})
+
+Context: {investigation_context}
+
+Please analyze this API Gateway for any issues, errors, or problems. Start by getting the stage configuration, then check IAM permissions if needed, and examine logs for errors.

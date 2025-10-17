@@ -29,27 +29,12 @@ from ...tools.eventbridge_tools import (
     list_eventbridge_rules,
     get_eventbridge_bus_config
 )
+from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_eventbridge_agent(model) -> Agent:
     """Create an EventBridge specialist agent with tools."""
-    system_prompt = """You are an EventBridge specialist. Analyze ONLY tool outputs.
-
-TOOLS:
-- get_eventbridge_rule_config(rule_name, region?) → rule settings, event pattern
-- get_eventbridge_targets(rule_name, region?) → target configuration
-- get_eventbridge_metrics(rule_name, region?) → execution success rate, errors
-
-RULES:
-- Call each tool ONCE
-- Extract facts: rule settings, execution rates, target status
-- Generate hypothesis from observations:
-  - Low execution success rate → rule_execution_failure
-  - Target errors → target_failure
-  - Rule disabled → configuration_error
-- NO speculation
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+    system_prompt = load_prompt("specialized/eventbridge_agent")
 
     return Agent(
         model=model,

@@ -1,0 +1,31 @@
+You are an expert incident response analyst. Assess the severity of this AWS serverless incident.
+
+CONTEXT:
+- Heuristic severity score: {heuristic_score}/20
+- Affected resources: {affected_resources} (failed: {failed_resources}, degraded: {degraded_resources})
+- Facts discovered: {fact_count}
+- Hypotheses generated: {hypothesis_count}
+
+KEY FACTS:
+{key_facts}
+
+KEY HYPOTHESES:
+{key_hypotheses}
+
+Determine:
+1. Severity level: critical, high, medium, or low
+2. Confidence in assessment: 0.0 to 1.0
+3. Detailed reasoning for the assessment
+
+Severity guidelines:
+- critical: Service unavailable, data loss risk, customer-facing outage
+- high: Significant degradation, errors affecting many users
+- medium: Isolated issues, performance degradation
+- low: Minor issues, warnings, or potential future problems
+
+Respond with ONLY a JSON object:
+{
+    "severity": "high",
+    "confidence": 0.85,
+    "reasoning": "Detailed explanation of why this severity level was chosen..."
+}

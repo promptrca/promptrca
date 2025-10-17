@@ -28,27 +28,12 @@ from ...tools.sns_tools import (
     get_sns_subscriptions,
     list_sns_topics
 )
+from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_sns_agent(model) -> Agent:
     """Create an SNS specialist agent with tools."""
-    system_prompt = """You are an SNS specialist. Analyze ONLY tool outputs.
-
-TOOLS:
-- get_sns_topic_config(topic_arn, region?) → topic settings, delivery policy
-- get_sns_topic_metrics(topic_name, region?) → delivery success rate, errors
-- get_sns_subscriptions(topic_arn, region?) → subscription status
-
-RULES:
-- Call each tool ONCE
-- Extract facts: topic settings, delivery rates, subscription status
-- Generate hypothesis from observations:
-  - Low delivery success rate → delivery_failure
-  - Subscription errors → subscription_issue
-  - Endpoint errors → endpoint_issue
-- NO speculation
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+    system_prompt = load_prompt("specialized/sns_agent")
 
     return Agent(
         model=model,

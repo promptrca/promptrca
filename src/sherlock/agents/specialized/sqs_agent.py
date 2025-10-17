@@ -28,27 +28,12 @@ from ...tools.sqs_tools import (
     get_sqs_dead_letter_queue,
     list_sqs_queues
 )
+from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_sqs_agent(model) -> Agent:
     """Create an SQS specialist agent with tools."""
-    system_prompt = """You are an SQS specialist. Analyze ONLY tool outputs.
-
-TOOLS:
-- get_sqs_queue_config(queue_url, region?) → visibility timeout, DLQ settings
-- get_sqs_queue_metrics(queue_name, region?) → message count, age, errors
-- get_sqs_dead_letter_queue(queue_url, region?) → DLQ configuration
-
-RULES:
-- Call each tool ONCE
-- Extract facts: queue settings, message counts, error rates
-- Generate hypothesis from observations:
-  - High message age → visibility_timeout
-  - Messages in DLQ → dlq_issue
-  - Throttling errors → performance_issue
-- NO speculation
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+    system_prompt = load_prompt("specialized/sqs_agent")
 
     return Agent(
         model=model,

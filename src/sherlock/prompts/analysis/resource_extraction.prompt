@@ -1,0 +1,11 @@
+Extract AWS resource identifiers from text: {text}
+
+EXTRACT ONLY:
+- Resource names (explicit mentions)
+- ARNs
+- Resource IDs
+
+DO NOT extract generic service names without specific identifiers.
+
+OUTPUT: JSON [{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}]
+Return [] if no explicit resources found.

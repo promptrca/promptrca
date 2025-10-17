@@ -28,28 +28,12 @@ from ...tools.dynamodb_tools import (
     describe_dynamodb_streams,
     list_dynamodb_tables
 )
+from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_dynamodb_agent(model) -> Agent:
     """Create a DynamoDB specialist agent with tools."""
-    system_prompt = """You are a DynamoDB specialist. Analyze ONLY tool outputs.
-
-TOOLS:
-- get_dynamodb_table_config(table_name, region?) → billing mode, capacity, indexes
-- get_dynamodb_table_metrics(table_name, region?) → consumed/provisioned capacity, throttles
-- describe_dynamodb_streams(table_name, region?) → stream status
-
-RULES:
-- Call each tool ONCE
-- Extract facts: capacity mode, read/write units, throttle count
-- Generate hypothesis from metrics:
-  - ThrottledRequests > 0 → throttling
-  - Consumed > Provisioned → capacity_issue
-  - Stream errors in response → stream_error
-- If on-demand mode → no capacity constraints
-- NO speculation
-
-OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
+    system_prompt = load_prompt("specialized/dynamodb_agent")
 
     return Agent(
         model=model,

@@ -26,6 +26,7 @@ import json
 from ..models.base import Fact, Hypothesis, RootCauseAnalysis
 from ..clients.aws_client import AWSClient
 from ..utils import get_logger
+from ..prompts.loader import load_prompt, load_prompt_with_vars
 
 logger = get_logger(__name__)
 
@@ -94,17 +95,7 @@ class RootCauseAgent:
         for i, h in enumerate(hypothesis_data):
             hypotheses_list.append(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f})")
         
-        prompt = f"""Select PRIMARY root cause from hypotheses (already sorted by confidence).
-
-HYPOTHESES:
-{chr(10).join(hypotheses_list)}
-
-RULES:
-- Primary = highest confidence hypothesis that explains the incident
-- Contributing factors = other high-confidence hypotheses
-- Summary: 1-2 sentences explaining selection
-
-OUTPUT: JSON {{"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "analysis_summary": "..."}}"""
+        prompt = load_prompt_with_vars("analysis/root_cause_selection", hypotheses_list="\n".join(hypotheses_list))
 
         try:
             # Use Strands agent

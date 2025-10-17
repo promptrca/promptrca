@@ -28,36 +28,13 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
+from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_apigateway_agent(model) -> Agent:
     """Create an API Gateway specialist agent with tools."""
     
-    system_prompt = """You are an API Gateway specialist. Analyze ONLY tool outputs.
-
-TOOLS:
-- get_api_gateway_stage_config(api_id, stage, region?) → integration type, IAM role, URI
-- get_iam_role_config(role_name, region?) → permissions
-- get_cloudwatch_logs(log_group, region?) → request/response logs
-
-OUTPUT SCHEMA (strict):
-{
-  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
-  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
-  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
-  "summary": "1-2 sentences"
-}
-
-CRITICAL RULES:
-- Call each tool ONCE
-- State ONLY what you observe in integration config
-- Integration URI shows actual target service (Lambda, Step Functions, HTTP, etc.)
-- DO NOT assume integration target without seeing it in config
-- Extract facts: integration type, credentials role, target service
-- Every hypothesis MUST cite specific evidence from facts
-- Return empty arrays [] if no evidence found
-- Generate hypothesis only from observed errors in logs
-- NO speculation beyond tool outputs"""
+    system_prompt = load_prompt("specialized/apigateway_agent")
 
     return Agent(
         model=model,
@@ -93,11 +70,10 @@ def create_apigateway_agent_tool(apigateway_agent: Agent):
         
         try:
             # Create investigation prompt
-            prompt = f"""Investigate API Gateway: {api_id} (stage: {stage_name})
-            
-Context: {investigation_context}
-
-Please analyze this API Gateway for any issues, errors, or problems. Start by getting the stage configuration, then check IAM permissions if integration issues are suspected, and examine logs for errors."""
+            prompt = load_prompt_with_vars("specialized/apigateway_investigation", 
+                                         api_id=api_id, 
+                                         stage_name=stage_name,
+                                         investigation_context=investigation_context)
 
             # Run the agent
             agent_result = apigateway_agent(prompt)
