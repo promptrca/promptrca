@@ -24,7 +24,6 @@ import json
 from typing import List, Optional
 from ..models import Fact, Hypothesis
 from ..utils import get_logger
-from ..prompts.loader import load_prompt, load_prompt_with_vars
 
 logger = get_logger(__name__)
 
@@ -69,7 +68,26 @@ class HypothesisAgent:
         # Build the prompt for AI
         facts_text = "\n".join([f"- [{f.source}] {f.content} (confidence: {f.confidence:.2f})" for f in facts])
 
-        prompt = load_prompt_with_vars("analysis/hypothesis_generation", facts_text=facts_text)
+        prompt = f"""Generate hypotheses from facts. Use ONLY provided evidence - NO speculation.
+
+FACTS:
+{facts_text}
+
+CONFIDENCE ASSIGNMENT:
+- 0.95+: Explicit error/exception in logs
+- 0.85-0.94: Configuration mismatch observed
+- 0.70-0.84: Strong correlation between facts
+- <0.70: Weak signal
+
+HYPOTHESIS TYPES:
+permission_issue, configuration_error, code_bug, timeout, resource_constraint, integration_failure, infrastructure_issue
+
+RULES:
+- Each hypothesis must cite specific facts as evidence
+- Do NOT invent scenarios not in facts
+- Rank by confidence (highest first)
+
+OUTPUT: JSON [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}}]"""
 
         try:
             # Use Strands agent to generate hypotheses (call agent directly)

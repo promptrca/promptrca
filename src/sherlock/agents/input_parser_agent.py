@@ -30,7 +30,6 @@ from ..models import Fact
 from ..utils import get_logger
 from strands import Agent
 from ..utils.config import create_bedrock_model
-from ..prompts.loader import load_prompt, load_prompt_with_vars
 
 logger = get_logger(__name__)
 
@@ -171,7 +170,17 @@ class InputParserAgent:
 
     def _ai_extract_resources(self, text: str, region: str, arns: List[str]) -> List[ParsedResource]:
         """Use AI to extract AWS resource names and types from free text."""
-        prompt = load_prompt_with_vars("analysis/resource_extraction", text=text)
+        prompt = f"""Extract AWS resource identifiers from text: {text}
+
+EXTRACT ONLY:
+- Resource names (explicit mentions)
+- ARNs
+- Resource IDs
+
+DO NOT extract generic service names without specific identifiers.
+
+OUTPUT: JSON [{{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}}]
+Return [] if no explicit resources found."""
 
         try:
             agent = Agent(model=self.model)
@@ -240,7 +249,10 @@ class InputParserAgent:
     
     def _ai_extract_errors(self, text: str) -> List[str]:
         """Use AI to extract error messages and issue descriptions."""
-        prompt = load_prompt_with_vars("analysis/error_extraction", text=text)
+        prompt = f"""Extract error messages from: {text}
+
+OUTPUT: JSON array of error descriptions
+Example: ["500 errors", "Permission denied"]"""
 
         try:
             agent = Agent(model=self.model)

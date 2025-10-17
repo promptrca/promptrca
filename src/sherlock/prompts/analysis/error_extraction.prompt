@@ -1,4 +1,0 @@
-Extract error messages from: {text}
-
-OUTPUT: JSON array of error descriptions
-Example: ["500 errors", "Permission denied"]

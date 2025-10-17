@@ -28,13 +28,37 @@ from ...tools.aws_tools import (
     get_cloudwatch_logs, 
     get_iam_role_config
 )
-from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_lambda_agent(model) -> Agent:
     """Create a Lambda specialist agent with tools."""
     
-    system_prompt = load_prompt("specialized/lambda_agent")
+    system_prompt = """You are a Lambda specialist. Analyze ONLY tool outputs.
+
+TOOLS:
+- get_lambda_config(function_name, region?) → memory, timeout, runtime, IAM role
+- get_cloudwatch_logs(log_group, region?) → recent logs, errors, exceptions
+- get_iam_role_config(role_name, region?) → attached policies, permissions
+
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
+- Call each tool ONCE
+- Extract facts: memory allocation, timeout setting, runtime version, error messages from logs
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
+- Map observations to hypothesis types:
+  - Exception/stack trace in logs → code_bug
+  - "PermissionDenied" → permission_issue
+  - Execution time > configured timeout → timeout
+  - Memory usage > allocated → resource_constraint
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,
@@ -69,9 +93,11 @@ def create_lambda_agent_tool(lambda_agent: Agent):
         
         try:
             # Create investigation prompt
-            prompt = load_prompt_with_vars("specialized/lambda_investigation", 
-                                         function_name=function_name, 
-                                         investigation_context=investigation_context)
+            prompt = f"""Investigate Lambda function: {function_name}
+            
+Context: {investigation_context}
+
+Please analyze this Lambda function for any issues, errors, or problems. Start by getting the function configuration, then check logs for errors, and examine IAM permissions if needed."""
 
             # Run the agent
             agent_result = lambda_agent(prompt)

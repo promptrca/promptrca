@@ -1,5 +1,0 @@
-Investigate Step Functions state machine: {state_machine_arn}
-
-Context: {investigation_context}
-
-Please analyze this Step Functions state machine for any issues, errors, or problems. Start by getting the state machine definition, then check IAM permissions if execution issues are suspected, and examine logs for errors.

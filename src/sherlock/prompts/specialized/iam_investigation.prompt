@@ -1,5 +1,0 @@
-Investigate IAM role permissions: {role_name}
-
-Context: {investigation_context}
-
-Please analyze this IAM role for any permission issues, policy problems, or security concerns. Start by getting the role configuration, then check logs for IAM-related errors.

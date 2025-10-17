@@ -25,12 +25,33 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
-from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_iam_agent(model) -> Agent:
     """Create an IAM specialist agent with tools."""
-    system_prompt = load_prompt("specialized/iam_agent")
+    system_prompt = """You are an IAM specialist. Analyze ONLY tool outputs.
+
+TOOLS:
+- get_iam_role_config(role_name, region?) → trust policy, attached policies, inline policies
+- get_cloudwatch_logs(log_group, region?) → AccessDenied errors
+
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
+- Call each tool ONCE
+- Extract allowed actions from policy statements
+- If context mentions required action → check if action is in policy
+- If logs show "User X is not authorized to perform Y" → missing permission Y
+- Compare required vs allowed
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,
@@ -53,9 +74,11 @@ def create_iam_agent_tool(iam_agent: Agent):
     def investigate_iam_permissions(role_name: str, investigation_context: str = "") -> str:
         import json
         try:
-            prompt = load_prompt_with_vars("specialized/iam_investigation", 
-                                         role_name=role_name,
-                                         investigation_context=investigation_context)
+            prompt = f"""Investigate IAM role permissions: {role_name}
+
+Context: {investigation_context}
+
+Please analyze this IAM role for any permission issues, policy problems, or security concerns. Start by getting the role configuration, then check logs for IAM-related errors."""
 
             agent_result = iam_agent(prompt)
             response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)

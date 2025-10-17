@@ -28,12 +28,27 @@ from ...tools.s3_tools import (
     list_s3_bucket_objects,
     get_s3_bucket_policy
 )
-from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_s3_agent(model) -> Agent:
     """Create an S3 specialist agent with tools."""
-    system_prompt = load_prompt("specialized/s3_agent")
+    system_prompt = """You are an S3 specialist. Analyze ONLY tool outputs.
+
+TOOLS:
+- get_s3_bucket_config(bucket_name, region?) → versioning, encryption, lifecycle
+- get_s3_bucket_metrics(bucket_name, region?) → request metrics, errors
+- get_s3_bucket_policy(bucket_name, region?) → bucket policy
+
+RULES:
+- Call each tool ONCE
+- Extract facts: bucket settings, error rates, policy statements
+- Generate hypothesis from observations:
+  - High error rate in metrics → performance_issue
+  - Access denied errors → permission_issue
+  - Encryption errors → encryption_issue
+- NO speculation
+
+OUTPUT: JSON {"facts": [...], "hypotheses": [...], "advice": [...], "summary": "1-2 sentences"}"""
 
     return Agent(
         model=model,

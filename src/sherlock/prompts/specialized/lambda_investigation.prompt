@@ -1,5 +1,0 @@
-Investigate Lambda function: {function_name}
-
-Context: {investigation_context}
-
-Please analyze this Lambda function for any issues, errors, or problems. Start by getting the function configuration, then check logs for errors, and examine IAM permissions if needed.

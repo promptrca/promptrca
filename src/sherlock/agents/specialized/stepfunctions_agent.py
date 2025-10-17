@@ -27,12 +27,37 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
-from ...prompts.loader import load_prompt, load_prompt_with_vars
 
 
 def create_stepfunctions_agent(model) -> Agent:
     """Create a Step Functions specialist agent with tools."""
-    system_prompt = load_prompt("specialized/stepfunctions_agent")
+    system_prompt = """You are a Step Functions specialist. Analyze ONLY tool outputs.
+
+TOOLS:
+- get_stepfunctions_definition(state_machine_arn, region?) → ASL JSON, role ARN
+- get_iam_role_config(role_name, region?) → permissions
+- get_cloudwatch_logs(log_group, region?) → execution logs
+
+OUTPUT SCHEMA (strict):
+{
+  "facts": [{"source": "tool_name", "content": "observation", "confidence": 0.0-1.0, "metadata": {}}],
+  "hypotheses": [{"type": "category", "description": "issue", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}],
+  "advice": [{"title": "action", "description": "details", "priority": "high/medium/low", "category": "type"}],
+  "summary": "1-2 sentences"
+}
+
+CRITICAL RULES:
+- Call each tool ONCE
+- From definition: extract states, identify task ARNs (which services are invoked)
+- State ONLY services you see in task Resource ARNs
+- Check if IAM role has permissions for actions in definition
+- Every hypothesis MUST cite specific evidence from facts
+- Return empty arrays [] if no evidence found
+- Map log errors to hypotheses:
+  - "AccessDeniedException" → permission_issue
+  - "States.TaskFailed" → integration_failure
+  - Missing resource in definition → configuration_error
+- NO speculation beyond tool outputs"""
 
     return Agent(
         model=model,
@@ -55,9 +80,11 @@ def create_stepfunctions_agent_tool(stepfunctions_agent: Agent):
     def investigate_stepfunctions(state_machine_arn: str, investigation_context: str = "") -> str:
         import json
         try:
-            prompt = load_prompt_with_vars("specialized/stepfunctions_investigation", 
-                                         state_machine_arn=state_machine_arn,
-                                         investigation_context=investigation_context)
+            prompt = f"""Investigate Step Functions state machine: {state_machine_arn}
+
+Context: {investigation_context}
+
+Please analyze this Step Functions state machine for any issues, errors, or problems. Start by getting the state machine definition, then check IAM permissions if execution issues are suspected, and examine logs for errors."""
             agent_result = stepfunctions_agent(prompt)
             response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
 
