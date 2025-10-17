@@ -30,14 +30,45 @@ from ..utils.config import get_region
 def get_lambda_config(function_name: str, region: str = None) -> str:
     region = region or get_region()
     """
-    Get Lambda function configuration including environment variables and IAM role.
+    Get comprehensive Lambda function configuration for root cause analysis.
+    
+    This tool retrieves all critical configuration details needed to diagnose Lambda issues:
+    - Runtime environment (Python version, Node.js version, etc.)
+    - Resource allocation (memory, timeout settings)
+    - IAM role and permissions
+    - Environment variables and secrets
+    - Layer dependencies
+    - Tracing and monitoring configuration
     
     Args:
-        function_name: The Lambda function name
-        region: AWS region (default: from environment)
+        function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with Lambda configuration
+        JSON string containing:
+        - function_name: Name of the function
+        - function_arn: Full ARN of the function
+        - runtime: Runtime version (e.g., "python3.12", "nodejs18.x")
+        - role: IAM role ARN used by the function
+        - handler: Entry point function (e.g., "index.handler")
+        - timeout: Maximum execution time in seconds
+        - memory_size: Allocated memory in MB
+        - environment_variables: Key-value pairs of environment variables
+        - tracing_config: X-Ray tracing configuration
+        - layers: List of Lambda layers attached
+        - last_modified: When the function was last updated
+    
+    Common Error Scenarios:
+        - ResourceNotFoundException: Function doesn't exist
+        - AccessDeniedException: Insufficient permissions to describe function
+        - InvalidParameterValueException: Invalid function name format
+    
+    Use Cases:
+        - Diagnosing timeout issues (check timeout vs actual execution time)
+        - Memory-related problems (check allocated vs used memory)
+        - Permission errors (verify IAM role configuration)
+        - Runtime compatibility issues (check runtime version)
+        - Environment variable problems (verify env vars are set correctly)
     """
     import boto3
     
@@ -68,15 +99,45 @@ def get_lambda_config(function_name: str, region: str = None) -> str:
 def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None) -> str:
     region = region or get_region()
     """
-    Get CloudWatch logs for a Lambda function.
+    Retrieve CloudWatch logs for Lambda function error analysis and debugging.
+    
+    This tool fetches recent log events from the Lambda function's CloudWatch log group
+    to identify errors, exceptions, performance issues, and execution patterns.
+    Essential for diagnosing runtime errors, timeout issues, and code problems.
     
     Args:
-        function_name: The Lambda function name
-        hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
+        function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
+        hours_back: Number of hours to look back for logs (default: 1, max recommended: 24)
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with Lambda log events
+        JSON string containing:
+        - function_name: Name of the function
+        - log_group: CloudWatch log group path (e.g., "/aws/lambda/my-function")
+        - hours_back: Time range searched
+        - event_count: Number of log events found
+        - events: Array of log events with:
+          - timestamp: Unix timestamp in milliseconds
+          - message: Log message content (may contain errors, stack traces, etc.)
+    
+    Common Error Patterns to Look For:
+        - "Task timed out": Function exceeded timeout limit
+        - "Memory limit exceeded": Function ran out of allocated memory
+        - "AccessDenied": IAM permission issues
+        - "ResourceNotFoundException": Missing AWS resources
+        - "ValidationException": Invalid input parameters
+        - Stack traces: Code errors and exceptions
+        - "RequestId": Unique identifier for each invocation
+    
+    Use Cases:
+        - Debugging runtime errors and exceptions
+        - Analyzing timeout issues (check for "Task timed out" messages)
+        - Memory problems (look for "Memory limit exceeded")
+        - Permission errors (search for "AccessDenied" or "Forbidden")
+        - Code bugs (examine stack traces and error messages)
+        - Performance analysis (check execution patterns and timing)
+    
+    Note: Logs are retrieved from the most recent log streams to ensure relevance.
     """
     import boto3
     from datetime import datetime, timedelta
@@ -131,15 +192,44 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None)
 def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
-    Get CloudWatch metrics for a Lambda function.
+    Retrieve CloudWatch metrics for Lambda function performance analysis.
+    
+    This tool fetches key performance metrics to identify patterns, bottlenecks,
+    and issues with Lambda function execution. Critical for understanding
+    invocation patterns, error rates, and resource utilization.
     
     Args:
-        function_name: The Lambda function name
-        hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
+        function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
+        hours_back: Number of hours to look back for metrics (default: 24)
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with Lambda metrics
+        JSON string containing:
+        - function_name: Name of the function
+        - time_range: Start/end times and duration of metrics collection
+        - metrics: Dictionary with metric data:
+          - Invocations: Total number of function invocations
+          - Errors: Number of failed invocations
+          - Duration: Execution time statistics (avg, max, sum)
+          - Throttles: Number of throttled invocations
+          - ConcurrentExecutions: Peak concurrent executions
+          - UnreservedConcurrentExecutions: Available concurrency
+    
+    Key Metrics Analysis:
+        - High Error Rate: Errors/Invocations > 5% indicates problems
+        - Duration Spikes: Max duration approaching timeout suggests issues
+        - Throttling: Throttles > 0 indicates concurrency limits exceeded
+        - Low Invocations: May indicate upstream issues or misconfiguration
+    
+    Use Cases:
+        - Performance monitoring and trend analysis
+        - Error rate investigation (high error percentages)
+        - Timeout analysis (duration vs configured timeout)
+        - Throttling issues (concurrent execution limits)
+        - Capacity planning (invocation patterns and scaling needs)
+        - SLA monitoring (availability and performance metrics)
+    
+    Note: Metrics are aggregated in 1-hour periods for the specified time range.
     """
     import boto3
     from datetime import datetime, timedelta
@@ -195,14 +285,40 @@ def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = N
 def get_lambda_layers(function_name: str, region: str = None) -> str:
     region = region or get_region()
     """
-    Get Lambda function layers information.
+    Retrieve Lambda function layer information for dependency analysis.
+    
+    This tool examines the layers attached to a Lambda function to identify
+    potential dependency issues, version conflicts, or missing runtime components.
+    Essential for diagnosing import errors and runtime environment problems.
     
     Args:
-        function_name: The Lambda function name
-        region: AWS region (default: from environment)
+        function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with Lambda layers details
+        JSON string containing:
+        - function_name: Name of the function
+        - layer_count: Number of layers attached
+        - layers: Array of layer details:
+          - arn: Full ARN of the layer
+          - name: Layer name (extracted from ARN)
+          - size: Layer size in bytes
+    
+    Common Layer Issues:
+        - Missing layers: Function expects layers that aren't attached
+        - Version conflicts: Multiple layers with conflicting versions
+        - Size limits: Total layer size exceeds Lambda limits (250MB unzipped)
+        - Runtime mismatch: Layers built for different runtime versions
+        - Import errors: Code can't find modules provided by layers
+    
+    Use Cases:
+        - Diagnosing import errors (missing dependencies in layers)
+        - Runtime environment issues (checking layer compatibility)
+        - Dependency conflicts (multiple versions of same library)
+        - Performance analysis (layer size impact on cold starts)
+        - Security auditing (checking layer sources and permissions)
+    
+    Note: Layer information is retrieved from the function configuration.
     """
     import boto3
     

@@ -30,14 +30,54 @@ from ..utils.config import get_region
 def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
     region = region or get_region()
     """
-    Get DynamoDB table configuration and status.
+    Retrieve comprehensive DynamoDB table configuration for capacity and performance analysis.
+    
+    This tool fetches all critical table settings needed to diagnose DynamoDB issues:
+    - Billing mode (provisioned vs on-demand)
+    - Capacity settings (read/write units)
+    - Index configuration (GSI/LSI)
+    - Encryption and security settings
+    - Stream configuration
+    - Table status and metadata
     
     Args:
-        table_name: The DynamoDB table name
-        region: AWS region (default: from environment)
+        table_name: The DynamoDB table name (e.g., "users", "orders-prod")
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with table configuration
+        JSON string containing:
+        - table_name: Name of the table
+        - table_arn: Full ARN of the table
+        - table_status: Current status (ACTIVE, CREATING, UPDATING, DELETING)
+        - creation_date: When the table was created
+        - item_count: Number of items in the table
+        - table_size_bytes: Total size of the table
+        - key_schema: Primary key definition
+        - attribute_definitions: Attribute type definitions
+        - provisioned_throughput: Read/write capacity units (if provisioned billing)
+        - billing_mode: Billing mode (PROVISIONED or PAY_PER_REQUEST)
+        - global_secondary_indexes: GSI configurations
+        - local_secondary_indexes: LSI configurations
+        - stream_specification: DynamoDB Streams configuration
+        - sse_description: Server-side encryption settings
+        - table_class: Storage class (STANDARD or STANDARD_IA)
+    
+    Common Configuration Issues:
+        - Insufficient capacity: Provisioned throughput too low for workload
+        - Missing indexes: Queries failing due to missing GSI/LSI
+        - Billing mode mismatch: On-demand vs provisioned capacity issues
+        - Encryption problems: SSE configuration issues
+        - Stream configuration: Missing or misconfigured streams
+    
+    Use Cases:
+        - Capacity planning and optimization
+        - Throttling analysis (check provisioned vs consumed capacity)
+        - Index optimization (verify GSI/LSI configuration)
+        - Security auditing (encryption and access patterns)
+        - Performance tuning (billing mode and capacity settings)
+        - Stream setup verification (for real-time processing)
+    
+    Note: This tool provides the current configuration, not historical changes.
     """
     import boto3
     
@@ -74,15 +114,46 @@ def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
 def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: str = None) -> str:
     region = region or get_region()
     """
-    Get CloudWatch metrics for a DynamoDB table.
+    Retrieve CloudWatch metrics for DynamoDB table performance and throttling analysis.
+    
+    This tool fetches key performance metrics to identify capacity issues, throttling,
+    and usage patterns. Critical for diagnosing DynamoDB performance problems and
+    optimizing capacity allocation.
     
     Args:
-        table_name: The DynamoDB table name
-        hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
+        table_name: The DynamoDB table name (e.g., "users", "orders-prod")
+        hours_back: Number of hours to look back for metrics (default: 24)
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with table metrics
+        JSON string containing:
+        - table_name: Name of the table
+        - time_range: Start/end times and duration of metrics collection
+        - metrics: Dictionary with metric data:
+          - ConsumedReadCapacityUnits: Actual read capacity consumed
+          - ConsumedWriteCapacityUnits: Actual write capacity consumed
+          - ReadThrottleEvents: Number of read throttling events
+          - WriteThrottleEvents: Number of write throttling events
+          - SuccessfulRequestLatency: Request latency statistics
+          - UserErrors: Client-side errors (4xx)
+          - SystemErrors: Server-side errors (5xx)
+    
+    Key Metrics Analysis:
+        - Throttling: ReadThrottleEvents > 0 or WriteThrottleEvents > 0 indicates capacity issues
+        - Capacity Utilization: Consumed vs Provisioned capacity (if provisioned billing)
+        - Error Rates: High UserErrors or SystemErrors indicate problems
+        - Latency: High SuccessfulRequestLatency suggests performance issues
+        - Burst Patterns: Sudden spikes in consumed capacity
+    
+    Use Cases:
+        - Throttling investigation (identify capacity bottlenecks)
+        - Performance optimization (analyze usage patterns)
+        - Capacity planning (right-size provisioned throughput)
+        - Error analysis (investigate user and system errors)
+        - Cost optimization (optimize on-demand vs provisioned billing)
+        - SLA monitoring (availability and performance metrics)
+    
+    Note: Metrics are aggregated in 1-hour periods for the specified time range.
     """
     import boto3
     from datetime import datetime, timedelta
@@ -136,17 +207,47 @@ def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: st
 
 
 @tool
-def describe_dynamodb_streams(describe: str, region: str = None) -> str:
+def describe_dynamodb_streams(table_name: str, region: str = None) -> str:
     region = region or get_region()
     """
-    Get DynamoDB streams configuration for a table.
+    Retrieve DynamoDB Streams configuration for real-time data processing analysis.
+    
+    This tool examines the DynamoDB Streams setup for a table to identify
+    stream-related issues, configuration problems, or missing stream capabilities.
+    Essential for diagnosing real-time processing and event-driven architecture issues.
     
     Args:
-        table_name: The DynamoDB table name
-        region: AWS region (default: from environment)
+        table_name: The DynamoDB table name (e.g., "users", "orders-prod")
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with streams configuration
+        JSON string containing:
+        - table_name: Name of the table
+        - stream_enabled: Whether streams are enabled (true/false)
+        - stream_view_type: Type of stream (KEYS_ONLY, NEW_IMAGE, OLD_IMAGE, NEW_AND_OLD_IMAGES)
+        - latest_stream_label: Latest stream label
+        - latest_stream_arn: ARN of the latest stream
+        - stream_arn: Full stream ARN (if enabled)
+        - stream_status: Stream status (ENABLED, ENABLING, DISABLED, DISABLING)
+        - creation_request_id: ID of the stream creation request
+        - shards: Array of stream shard information
+    
+    Common Stream Issues:
+        - Streams disabled: Table doesn't have streams enabled
+        - Wrong view type: Stream view type doesn't match application needs
+        - Stream errors: Stream processing failures or errors
+        - Missing consumers: No Lambda functions or Kinesis consumers
+        - Shard issues: Stream shard processing problems
+    
+    Use Cases:
+        - Real-time processing verification (check stream configuration)
+        - Event-driven architecture debugging (verify stream setup)
+        - Data replication issues (check stream status and shards)
+        - Lambda trigger problems (verify stream ARN and configuration)
+        - Kinesis integration issues (check stream consumer setup)
+        - Data consistency analysis (verify stream view type)
+    
+    Note: Stream information is retrieved from the table configuration and stream details.
     """
     import boto3
     
@@ -194,16 +295,33 @@ def describe_dynamodb_streams(describe: str, region: str = None) -> str:
 
 
 @tool
-def list_dynamodb_tables(list: str, region: str = None) -> str:
+def list_dynamodb_tables(region: str = None) -> str:
     region = region or get_region()
     """
-    List all DynamoDB tables in the region.
+    List all DynamoDB tables in the region for discovery and inventory purposes.
+    
+    This tool provides a comprehensive list of all DynamoDB tables in the specified
+    region, useful for discovery, inventory management, and identifying tables
+    that might be related to an investigation.
     
     Args:
-        region: AWS region (default: from environment)
+        region: AWS region (default: from environment config)
     
     Returns:
-        JSON string with table list
+        JSON string containing:
+        - region: AWS region searched
+        - table_count: Total number of tables found
+        - tables: Array of table names
+    
+    Use Cases:
+        - Table discovery (find tables related to an investigation)
+        - Inventory management (audit all tables in a region)
+        - Cross-table analysis (identify related tables)
+        - Security auditing (review all table access)
+        - Cost analysis (identify all billable tables)
+        - Migration planning (catalog tables for migration)
+    
+    Note: This tool only lists table names, not their configurations or metrics.
     """
     import boto3
     
