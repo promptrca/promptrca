@@ -25,7 +25,13 @@ HTTP server implementation using Amazon Bedrock AgentCore
 import argparse
 import os
 import asyncio
+import base64
 from typing import Dict, Any
+
+# IMPORTANT: Initialize telemetry BEFORE any imports
+from .utils.config import setup_strands_telemetry
+setup_strands_telemetry()
+
 from bedrock_agentcore import BedrockAgentCoreApp
 from starlette.responses import JSONResponse
 
@@ -94,6 +100,9 @@ app.add_route("/status", status, methods=["GET"])
 
 def main():
     """Main entry point for the HTTP server."""
+    # Telemetry is now initialized at module import time (see top of file)
+    # No need to call setup_strands_telemetry() here
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Sherlock AI Root-Cause Investigator HTTP Server")
     parser.add_argument("--region", "-r", 

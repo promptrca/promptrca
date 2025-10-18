@@ -23,6 +23,10 @@ Thin CLI wrapper that delegates to appropriate modules.
 """
 
 if __name__ == "__main__":
+    # Initialize telemetry before starting the application
+    from .utils.config import setup_strands_telemetry
+    setup_strands_telemetry()
+    
     # Delegate to HTTP server by default
     from .server import main
     main()

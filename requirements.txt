@@ -48,15 +48,19 @@ mcp==1.16.0
 # OpenTelemetry for observability
 opentelemetry-api==1.37.0
 opentelemetry-sdk==1.37.0
+opentelemetry-exporter-otlp==1.37.0
 opentelemetry-instrumentation==0.58b0
 opentelemetry-instrumentation-threading==0.58b0
 opentelemetry-semantic-conventions==0.58b0
+
+# Langfuse SDK for observability
+langfuse==2.58.0
 
 # CLI and configuration
 click==8.3.0
 colorama==0.4.6
 docstring-parser==0.17.0
-packaging==25.0
+packaging>=23.2,<25.0
 
 # Web framework components (for AgentCore)
 starlette==0.48.0

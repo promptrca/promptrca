@@ -76,7 +76,13 @@ INVESTIGATION PRIORITIES:
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_api_gateway_stage_config, get_iam_role_config, get_cloudwatch_logs]
+        tools=[get_api_gateway_stage_config, get_iam_role_config, get_cloudwatch_logs],
+        trace_attributes={
+            "service.name": "sherlock-apigateway-agent",
+            "service.version": "1.0.0",
+            "agent.type": "apigateway_specialist",
+            "aws.service": "apigateway"
+        }
     )
 
 

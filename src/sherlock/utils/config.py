@@ -385,3 +385,78 @@ def get_environment_info() -> Dict[str, str]:
         "aws_default_region": os.getenv("AWS_DEFAULT_REGION", "not set"),
         "mcp_enabled": str(get_mcp_config()["enabled"]),
     }
+
+
+def setup_strands_telemetry() -> None:
+    """
+    Set up Strands OpenTelemetry tracing for observability.
+    
+    Configures OTLP exporter to send traces to Langfuse and enables
+    Strands tracing for all agent interactions.
+    """
+    try:
+        from strands.telemetry import StrandsTelemetry
+        
+        # Get configuration from environment
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        service_name = os.getenv("OTEL_SERVICE_NAME", "sherlock")
+        public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+        secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+
+        if not otlp_endpoint:
+            print("⚠️  OTEL_EXPORTER_OTLP_ENDPOINT not set, skipping telemetry setup")
+            return
+
+        if not public_key or not secret_key:
+            print("⚠️  Langfuse credentials not set, skipping telemetry setup")
+            return
+
+        # Generate Basic Auth header from Langfuse API keys
+        import base64
+        credentials = f"{public_key}:{secret_key}"
+        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+        # Set OTEL environment variables for the exporter
+        os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {encoded_credentials}"
+
+        # Initialize Strands telemetry
+        strands_telemetry = StrandsTelemetry()
+
+        # Set up OTLP exporter with endpoint and auth headers
+        headers = {"Authorization": f"Basic {encoded_credentials}"}
+        strands_telemetry.setup_otlp_exporter(
+            endpoint=otlp_endpoint,
+            headers=headers
+        )
+        
+        # Set up console exporter for development (optional)
+        if os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true":
+            strands_telemetry.setup_console_exporter()
+        
+        print(f"✅ Strands telemetry configured: {service_name} -> {otlp_endpoint}")
+        print(f"🔑 Generated Basic Auth header for Langfuse")
+        
+    except ImportError as e:
+        print(f"⚠️  Strands telemetry not available: {e}")
+    except Exception as e:
+        print(f"⚠️  Failed to setup telemetry: {e}")
+
+
+def get_telemetry_config() -> Dict[str, Any]:
+    """
+    Get OpenTelemetry configuration from environment variables.
+    
+    Environment Variables:
+    - OTEL_EXPORTER_OTLP_ENDPOINT: OTLP endpoint URL (default: None)
+    - OTEL_SERVICE_NAME: Service name for traces (default: sherlock)
+    - OTEL_CONSOLE_EXPORT: Enable console export for development (default: false)
+    
+    Returns:
+        Dict[str, Any]: Telemetry configuration dictionary
+    """
+    return {
+        "otlp_endpoint": os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+        "service_name": os.getenv("OTEL_SERVICE_NAME", "sherlock"),
+        "console_export": os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true",
+        "enabled": bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+    }

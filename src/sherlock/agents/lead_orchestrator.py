@@ -28,10 +28,10 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 
 from strands import Agent, tool
+
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
 from ..utils.config import get_region, create_orchestrator_model, create_lambda_agent_model, create_apigateway_agent_model, create_stepfunctions_agent_model, create_iam_agent_model, create_dynamodb_agent_model, create_s3_agent_model, create_sqs_agent_model, create_sns_agent_model, create_eventbridge_agent_model, create_vpc_agent_model, create_hypothesis_agent_model, create_root_cause_agent_model
-from ..utils.token_tracker import TokenTracker, set_current_tracker, get_current_tracker
 from ..agents.input_parser_agent import ParsedInputs, ParsedResource
 from ..agents.specialized.lambda_agent import create_lambda_agent, create_lambda_agent_tool
 from ..agents.specialized.apigateway_agent import create_apigateway_agent, create_apigateway_agent_tool
@@ -51,10 +51,7 @@ from ..tools import (
     get_iam_role_config,
     get_lambda_logs,
     get_apigateway_logs,
-    get_stepfunctions_logs,
-    search_aws_documentation,
-    read_aws_documentation,
-    get_aws_documentation_recommendations
+    get_stepfunctions_logs
 )
 
 logger = get_logger(__name__)
@@ -128,7 +125,14 @@ class LeadOrchestratorAgent:
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
         
-        system_prompt = """You are the lead AWS incident investigator coordinating specialist agents for comprehensive root cause analysis.
+        # Check if AWS Knowledge MCP is enabled
+        from ..utils.config import get_mcp_config
+        mcp_config = get_mcp_config()
+        mcp_enabled = mcp_config.get("enabled", False)
+        
+        # Build system prompt based on MCP availability
+        if mcp_enabled:
+            system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
 
 INVESTIGATION FLOW:
 1. If X-Ray trace ID provided → analyze trace data to discover service interactions and error flows
@@ -162,37 +166,84 @@ COORDINATION RULES:
 - Do NOT generate hypotheses yourself - let specialists do their domain-specific analysis
 - Do NOT speculate about services not observed in traces or context
 
-OUTPUT: Provide comprehensive analysis combining specialist findings with AWS documentation context"""
+OUTPUT: Relay specialist findings with AWS documentation context when relevant"""
+        else:
+            system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
+
+INVESTIGATION FLOW:
+1. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
+2. From trace/context, identify AWS services involved
+3. Call appropriate specialist agent for each service (call ONCE per service)
+4. Return all findings - let downstream agents synthesize
+
+AVAILABLE SPECIALISTS:
+- investigate_lambda_function(function_name, context)
+- investigate_apigateway(api_id, stage, context)
+- investigate_stepfunctions(state_machine_arn, context)
+- investigate_iam_role(role_name, context)
+- investigate_dynamodb_issue(issue_description)
+- investigate_s3_issue(issue_description)
+- investigate_sqs_issue(issue_description)
+- investigate_sns_issue(issue_description)
+- investigate_eventbridge_issue(issue_description)
+- investigate_vpc_issue(issue_description)
+
+RULES:
+- Call specialists for services explicitly mentioned OR discovered in X-Ray trace
+- Provide context to specialists (error messages, trace findings)
+- Do NOT generate hypotheses yourself - specialists will do that
+- Do NOT speculate about services not observed
+- Be concise
+
+OUTPUT: Relay specialist findings"""
+        
+        # Build tools list based on MCP availability
+        tools = [
+            # X-Ray and AWS tools
+            get_xray_trace,
+            get_lambda_config,
+            get_api_gateway_stage_config,
+            get_stepfunctions_definition,
+            get_iam_role_config,
+            get_lambda_logs,
+            get_apigateway_logs,
+            get_stepfunctions_logs,
+            # Specialist agent tools
+            self.lambda_tool,
+            self.apigateway_tool,
+            self.stepfunctions_tool,
+            self.iam_tool,
+            self.dynamodb_tool,
+            self.s3_tool,
+            self.sqs_tool,
+            self.sns_tool,
+            self.eventbridge_tool,
+            self.vpc_tool,
+        ]
+        
+        # Add AWS Knowledge MCP tools only if enabled
+        if mcp_enabled:
+            from ..tools import (
+                search_aws_documentation,
+                read_aws_documentation,
+                get_aws_documentation_recommendations
+            )
+            tools.extend([
+                search_aws_documentation,
+                read_aws_documentation,
+                get_aws_documentation_recommendations
+            ])
 
         return Agent(
             model=self.model,
             system_prompt=system_prompt,
-            tools=[
-                # X-Ray and AWS tools
-                get_xray_trace,
-                get_lambda_config,
-                get_api_gateway_stage_config,
-                get_stepfunctions_definition,
-                get_iam_role_config,
-                get_lambda_logs,
-                get_apigateway_logs,
-                get_stepfunctions_logs,
-                # AWS Knowledge MCP tools
-                search_aws_documentation,
-                read_aws_documentation,
-                get_aws_documentation_recommendations,
-                # Specialist agent tools
-                self.lambda_tool,
-                self.apigateway_tool,
-                self.stepfunctions_tool,
-                self.iam_tool,
-                self.dynamodb_tool,
-                self.s3_tool,
-                self.sqs_tool,
-                self.sns_tool,
-                self.eventbridge_tool,
-                self.vpc_tool,
-            ]
+            tools=tools,
+            trace_attributes={
+                "service.name": "sherlock-orchestrator",
+                "service.version": "1.0.0",
+                "agent.type": "lead_orchestrator",
+                "agent.region": self.region
+            }
         )
     
     async def investigate(self, inputs: Dict[str, Any], region: str = None, assume_role_arn: Optional[str] = None, external_id: Optional[str] = None) -> InvestigationReport:
@@ -206,74 +257,118 @@ OUTPUT: Provide comprehensive analysis combining specialist findings with AWS do
         import time
         investigation_id = f"{int(time.time() * 1000)}.{hash(str(inputs)) % 10000}"
 
-        # Initialize token tracker for this investigation
-        token_tracker = TokenTracker()
-        set_current_tracker(token_tracker)
 
-        try:
-            # 1. Parse inputs
-            parsed_inputs = self._parse_inputs(inputs, region)
-
-            # 2. Build investigation context
-            context = self._build_investigation_context(parsed_inputs)
-
-            # 2.5 ENRICH context by fetching X-Ray traces (NEW)
-            context = await self._enrich_context_with_traces(context)
-
-            # 2.6 Insufficient data check
-            if not context.primary_targets and not context.trace_ids:
-                logger.warning("Insufficient data: no resources or traces identified")
-                return self._create_insufficient_data_report(investigation_id, 
-                    "No AWS resources or trace IDs identified. Cannot investigate.")
-
-            # 3. Create investigation prompt for lead agent
-            investigation_prompt = self._create_investigation_prompt(context)
-            
-            # Debug: Log the prompt to see what the AI is receiving
-            logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
-
-            # 5. Run lead orchestrator agent
-            logger.info("🤖 Running lead orchestrator agent...")
-            agent_result = self.lead_agent(investigation_prompt)
-            
-            # Record token usage for lead orchestrator
-            if token_tracker:
-                from ..utils.token_tracker import extract_model_id_from_bedrock_model
-                model_id = extract_model_id_from_bedrock_model(self.model)
-                token_tracker.record_agent_invocation("lead_orchestrator", model_id, agent_result.metrics)
-            
-            # 6. Parse agent response and extract structured data
-            facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
-
-            # 7. Generate investigation report
-            report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
-
-
-            return report
+        # Create root span for entire investigation
+        from opentelemetry import trace
+        tracer = trace.get_tracer(__name__)
         
-        except Exception as e:
-            import traceback
-            logger.error(f"❌ Investigation failed: {e}")
-            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        with tracer.start_as_current_span(
+            "sherlock.investigation",
+            attributes={
+                "investigation.id": investigation_id,
+                "investigation.region": region,
+                "investigation.type": "multi_agent",
+                "investigation.assume_role_arn": assume_role_arn or "",
+                "investigation.external_id": external_id or ""
+            }
+        ) as investigation_span:
             
-            # Return error report
-            from ..models.base import InvestigationReport
-            from datetime import datetime, timezone
-            return InvestigationReport(
-                run_id=investigation_id,
-                status="failed",
-                started_at=datetime.now(timezone.utc),
-                completed_at=datetime.now(timezone.utc),
-                duration_seconds=0.0,
-                affected_resources=[],
-                severity_assessment=None,
-                facts=[],
-                root_cause_analysis=None,
-                hypotheses=[],
-                advice=[],
-                timeline=[],
-                summary=f"Investigation failed: {str(e)}"
-            )
+            # Record input for Langfuse trace-level display
+            input_data = json.dumps(inputs, default=str)
+            investigation_span.set_attribute("langfuse.trace.input", input_data)
+            
+            # Also add as OTEL event for standards compliance
+            investigation_span.add_event("investigation.input", attributes={"data": input_data})
+
+            try:
+                # 1. Parse inputs
+                parsed_inputs = self._parse_inputs(inputs, region)
+
+                # 2. Build investigation context
+                context = self._build_investigation_context(parsed_inputs)
+
+                # 2.5 ENRICH context by fetching X-Ray traces (NEW)
+                context = await self._enrich_context_with_traces(context)
+
+                # 2.6 Insufficient data check
+                if not context.primary_targets and not context.trace_ids:
+                    logger.warning("Insufficient data: no resources or traces identified")
+                    return self._create_insufficient_data_report(investigation_id, 
+                        "No AWS resources or trace IDs identified. Cannot investigate.")
+
+                # 3. Create investigation prompt for lead agent
+                investigation_prompt = self._create_investigation_prompt(context)
+                
+                # Debug: Log the prompt to see what the AI is receiving
+                logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
+
+                # 5. Run lead orchestrator agent
+                logger.info("🤖 Running lead orchestrator agent...")
+                agent_result = self.lead_agent(investigation_prompt)
+            
+                
+                # 6. Parse agent response and extract structured data
+                facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
+
+                # 7. Generate investigation report
+                report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
+
+                # Record output for Langfuse trace-level display
+                output_data = json.dumps(report.to_dict() if hasattr(report, 'to_dict') else {"summary": str(report)}, default=str)
+                investigation_span.set_attribute("langfuse.trace.output", output_data)
+
+                # Also add as OTEL event
+                investigation_span.add_event("investigation.output", attributes={"data": output_data})
+
+                # Set metadata attributes for filtering
+                if hasattr(report, 'status'):
+                    investigation_span.set_attribute("output.status", report.status)
+                if hasattr(report, 'facts'):
+                    investigation_span.set_attribute("output.facts_count", len(report.facts))
+                if hasattr(report, 'hypotheses'):
+                    investigation_span.set_attribute("output.hypotheses_count", len(report.hypotheses))
+
+                return report
+            
+            except Exception as e:
+                import traceback
+                logger.error(f"❌ Investigation failed: {e}")
+                logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+                
+                # Return error report
+                from ..models.base import InvestigationReport
+                from datetime import datetime, timezone
+                error_report = InvestigationReport(
+                    run_id=investigation_id,
+                    status="failed",
+                    started_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(timezone.utc),
+                    duration_seconds=0.0,
+                    affected_resources=[],
+                    severity_assessment=None,
+                    facts=[],
+                    root_cause_analysis=None,
+                    hypotheses=[],
+                    advice=[],
+                    timeline=[],
+                    summary=f"Investigation failed: {str(e)}"
+                )
+                
+                # Record error output for Langfuse
+                error_output = json.dumps(
+                    error_report.to_dict() if hasattr(error_report, 'to_dict') else {"error": str(e)},
+                    default=str
+                )
+                investigation_span.set_attribute("langfuse.trace.output", error_output)
+                investigation_span.add_event("investigation.output", attributes={"data": error_output})
+                
+                # Set error metadata
+                investigation_span.set_attribute("output.status", "failed")
+                investigation_span.set_attribute("error", True)
+                investigation_span.set_attribute("error.type", type(e).__name__)
+                investigation_span.set_attribute("error.message", str(e))
+                
+                return error_report
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
@@ -739,13 +834,6 @@ OUTPUT: Provide comprehensive analysis combining specialist findings with AWS do
             "region": region
         }
         
-        # Get token usage and cost analysis from tracker
-        token_usage = None
-        cost_analysis = None
-        token_tracker = get_current_tracker()
-        if token_tracker:
-            token_usage = token_tracker.get_usage_summary()
-            cost_analysis = token_tracker.get_cost_analysis()
 
         return InvestigationReport(
             run_id=str(start_time.timestamp()),
@@ -760,8 +848,6 @@ OUTPUT: Provide comprehensive analysis combining specialist findings with AWS do
             hypotheses=hypotheses,
             advice=advice,
             timeline=timeline,
-            token_usage=token_usage,
-            cost_analysis=cost_analysis,
             summary=json.dumps(summary)
         )
     
