@@ -141,3 +141,6 @@ aws-credentials
 # OS
 .DS_Store
 Thumbs.db
+
+# Papers and research documents
+papers/
