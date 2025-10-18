@@ -272,6 +272,13 @@ OUTPUT: Relay specialist findings"""
                 "investigation.external_id": external_id or ""
             }
         ) as investigation_span:
+            
+            # Record input for Langfuse trace-level display
+            input_data = json.dumps(inputs, default=str)
+            investigation_span.set_attribute("langfuse.trace.input", input_data)
+            
+            # Also add as OTEL event for standards compliance
+            investigation_span.add_event("investigation.input", attributes={"data": input_data})
 
             try:
                 # 1. Parse inputs
@@ -306,6 +313,21 @@ OUTPUT: Relay specialist findings"""
                 # 7. Generate investigation report
                 report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
 
+                # Record output for Langfuse trace-level display
+                output_data = json.dumps(report.to_dict() if hasattr(report, 'to_dict') else {"summary": str(report)}, default=str)
+                investigation_span.set_attribute("langfuse.trace.output", output_data)
+
+                # Also add as OTEL event
+                investigation_span.add_event("investigation.output", attributes={"data": output_data})
+
+                # Set metadata attributes for filtering
+                if hasattr(report, 'status'):
+                    investigation_span.set_attribute("output.status", report.status)
+                if hasattr(report, 'facts'):
+                    investigation_span.set_attribute("output.facts_count", len(report.facts))
+                if hasattr(report, 'hypotheses'):
+                    investigation_span.set_attribute("output.hypotheses_count", len(report.hypotheses))
+
                 return report
             
             except Exception as e:
@@ -316,7 +338,7 @@ OUTPUT: Relay specialist findings"""
                 # Return error report
                 from ..models.base import InvestigationReport
                 from datetime import datetime, timezone
-                return InvestigationReport(
+                error_report = InvestigationReport(
                     run_id=investigation_id,
                     status="failed",
                     started_at=datetime.now(timezone.utc),
@@ -331,6 +353,22 @@ OUTPUT: Relay specialist findings"""
                     timeline=[],
                     summary=f"Investigation failed: {str(e)}"
                 )
+                
+                # Record error output for Langfuse
+                error_output = json.dumps(
+                    error_report.to_dict() if hasattr(error_report, 'to_dict') else {"error": str(e)},
+                    default=str
+                )
+                investigation_span.set_attribute("langfuse.trace.output", error_output)
+                investigation_span.add_event("investigation.output", attributes={"data": error_output})
+                
+                # Set error metadata
+                investigation_span.set_attribute("output.status", "failed")
+                investigation_span.set_attribute("error", True)
+                investigation_span.set_attribute("error.type", type(e).__name__)
+                investigation_span.set_attribute("error.message", str(e))
+                
+                return error_report
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
