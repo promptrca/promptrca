@@ -1,6 +1,6 @@
-# Sherlock Core - Docker Operations
+# PromptRCA Core - Docker Operations
 
-This directory contains the reorganized Sherlock core package with service-specific tools and a production-ready Docker setup.
+This directory contains the reorganized PromptRCA core package with service-specific tools and a production-ready Docker setup.
 
 ## Quick Start
 
@@ -10,7 +10,7 @@ This directory contains the reorganized Sherlock core package with service-speci
 cp .env.example .env
 # Edit .env with your AWS credentials and model preferences
 
-# Start all services (Sherlock HTTP server + Lambda container)
+# Start all services (PromptRCA HTTP server + Lambda container)
 docker-compose up -d
 
 # Check service status
@@ -63,7 +63,7 @@ make stop
 
 The docker-compose setup includes three services:
 
-### 1. Sherlock HTTP Server (`sherlock-server`)
+### 1. PromptRCA HTTP Server (`promptrca-server`)
 - **Dockerfile**: `Dockerfile.server` (optimized for HTTP server)
 - **Base Image**: `python:3.13-slim`
 - **Port**: `8080`
@@ -74,12 +74,12 @@ The docker-compose setup includes three services:
   - `GET /status` - Detailed status
   - `GET /ping` - Built-in AgentCore ping
 
-### 2. Sherlock Lambda (`sherlock-lambda`)
+### 2. PromptRCA Lambda (`promptrca-lambda`)
 - **Dockerfile**: `Dockerfile` (AWS Lambda runtime)
 - **Base Image**: `public.ecr.aws/lambda/python:3.13`
 - **Port**: `9000` (Lambda Runtime Interface Emulator)
 - **Purpose**: AWS Lambda runtime for testing Lambda deployments
-- **Handler**: `sherlock.lambda_handler.lambda_handler`
+- **Handler**: `promptrca.lambda_handler.lambda_handler`
 
 ## Dockerfiles
 
@@ -108,8 +108,8 @@ The project includes two specialized Dockerfiles:
 | `docker-compose down` | Stop all services |
 | `docker-compose ps` | Show service status |
 | `docker-compose logs` | Show logs from all services |
-| `docker-compose logs sherlock-server` | Show logs from specific service |
-| `docker-compose restart sherlock-server` | Restart specific service |
+| `docker-compose logs promptrca-server` | Show logs from specific service |
+| `docker-compose restart promptrca-server` | Restart specific service |
 
 ### Make Commands (Legacy)
 | Command | Description |
@@ -187,11 +187,11 @@ When deployed to AWS Lambda, credentials are automatically provided via the Lamb
 
 ## Configuration
 
-Sherlock supports comprehensive environment variable configuration for models and AWS settings.
+PromptRCA supports comprehensive environment variable configuration for models and AWS settings.
 
 ### Hierarchical Model Configuration
 
-Sherlock supports a flexible 3-tier hierarchical configuration system, allowing you to configure models at different levels of granularity:
+PromptRCA supports a flexible 3-tier hierarchical configuration system, allowing you to configure models at different levels of granularity:
 
 1. **Agent-specific** (highest priority) - Override for individual agents
 2. **Category-specific** (middle priority) - Configure entire categories of agents
@@ -199,53 +199,53 @@ Sherlock supports a flexible 3-tier hierarchical configuration system, allowing 
 
 #### Global Model Configuration (Fallback)
 - `BEDROCK_MODEL_ID` - Default Bedrock model for all agents (fallback)
-- `SHERLOCK_TEMPERATURE` - Default temperature for all agents (fallback)
-- `SHERLOCK_MAX_TOKENS` - Maximum tokens (optional)
+- `PROMPTRCA_TEMPERATURE` - Default temperature for all agents (fallback)
+- `PROMPTRCA_MAX_TOKENS` - Maximum tokens (optional)
 
 #### Category-Level Configuration
 
 Configure entire categories of agents with a single setting:
 
 **Specialist Agents (AWS Service Specialists):**
-- `SHERLOCK_SPECIALIST_MODEL_ID` - Model for all AWS service specialists
-- `SHERLOCK_SPECIALIST_TEMPERATURE` - Temperature for all specialists
+- `PROMPTRCA_SPECIALIST_MODEL_ID` - Model for all AWS service specialists
+- `PROMPTRCA_SPECIALIST_TEMPERATURE` - Temperature for all specialists
 
 **Analysis Agents (Hypothesis & Root Cause):**
-- `SHERLOCK_ANALYSIS_MODEL_ID` - Model for all analysis agents
-- `SHERLOCK_ANALYSIS_TEMPERATURE` - Temperature for all analysis agents
+- `PROMPTRCA_ANALYSIS_MODEL_ID` - Model for all analysis agents
+- `PROMPTRCA_ANALYSIS_TEMPERATURE` - Temperature for all analysis agents
 
 #### Agent-Specific Model Configuration
 
 Override category settings for individual agents:
 
 **Lead Orchestrator Agent:**
-- `SHERLOCK_ORCHESTRATOR_MODEL_ID` - Model for coordinating all other agents
-- `SHERLOCK_ORCHESTRATOR_TEMPERATURE` - Temperature for orchestrator
+- `PROMPTRCA_ORCHESTRATOR_MODEL_ID` - Model for coordinating all other agents
+- `PROMPTRCA_ORCHESTRATOR_TEMPERATURE` - Temperature for orchestrator
 
 **Specialized AWS Service Agents:**
-- `SHERLOCK_LAMBDA_MODEL_ID` / `SHERLOCK_LAMBDA_TEMPERATURE`
-- `SHERLOCK_APIGATEWAY_MODEL_ID` / `SHERLOCK_APIGATEWAY_TEMPERATURE`
-- `SHERLOCK_STEPFUNCTIONS_MODEL_ID` / `SHERLOCK_STEPFUNCTIONS_TEMPERATURE`
-- `SHERLOCK_IAM_MODEL_ID` / `SHERLOCK_IAM_TEMPERATURE`
-- `SHERLOCK_DYNAMODB_MODEL_ID` / `SHERLOCK_DYNAMODB_TEMPERATURE`
-- `SHERLOCK_S3_MODEL_ID` / `SHERLOCK_S3_TEMPERATURE`
-- `SHERLOCK_SQS_MODEL_ID` / `SHERLOCK_SQS_TEMPERATURE`
-- `SHERLOCK_SNS_MODEL_ID` / `SHERLOCK_SNS_TEMPERATURE`
-- `SHERLOCK_EVENTBRIDGE_MODEL_ID` / `SHERLOCK_EVENTBRIDGE_TEMPERATURE`
-- `SHERLOCK_VPC_MODEL_ID` / `SHERLOCK_VPC_TEMPERATURE`
+- `PROMPTRCA_LAMBDA_MODEL_ID` / `PROMPTRCA_LAMBDA_TEMPERATURE`
+- `PROMPTRCA_APIGATEWAY_MODEL_ID` / `PROMPTRCA_APIGATEWAY_TEMPERATURE`
+- `PROMPTRCA_STEPFUNCTIONS_MODEL_ID` / `PROMPTRCA_STEPFUNCTIONS_TEMPERATURE`
+- `PROMPTRCA_IAM_MODEL_ID` / `PROMPTRCA_IAM_TEMPERATURE`
+- `PROMPTRCA_DYNAMODB_MODEL_ID` / `PROMPTRCA_DYNAMODB_TEMPERATURE`
+- `PROMPTRCA_S3_MODEL_ID` / `PROMPTRCA_S3_TEMPERATURE`
+- `PROMPTRCA_SQS_MODEL_ID` / `PROMPTRCA_SQS_TEMPERATURE`
+- `PROMPTRCA_SNS_MODEL_ID` / `PROMPTRCA_SNS_TEMPERATURE`
+- `PROMPTRCA_EVENTBRIDGE_MODEL_ID` / `PROMPTRCA_EVENTBRIDGE_TEMPERATURE`
+- `PROMPTRCA_VPC_MODEL_ID` / `PROMPTRCA_VPC_TEMPERATURE`
 
 **Analysis Agents:**
-- `SHERLOCK_HYPOTHESIS_MODEL_ID` / `SHERLOCK_HYPOTHESIS_TEMPERATURE`
-- `SHERLOCK_ROOT_CAUSE_MODEL_ID` / `SHERLOCK_ROOT_CAUSE_TEMPERATURE`
+- `PROMPTRCA_HYPOTHESIS_MODEL_ID` / `PROMPTRCA_HYPOTHESIS_TEMPERATURE`
+- `PROMPTRCA_ROOT_CAUSE_MODEL_ID` / `PROMPTRCA_ROOT_CAUSE_TEMPERATURE`
 
 **Synthesis Model:**
-- `SHERLOCK_SYNTHESIS_TEMPERATURE` - Temperature for conservative analysis
+- `PROMPTRCA_SYNTHESIS_TEMPERATURE` - Temperature for conservative analysis
 
 #### Configuration Precedence
 
-1. **Agent-specific** environment variables (e.g., `SHERLOCK_LAMBDA_MODEL_ID`)
-2. **Category-specific** environment variables (e.g., `SHERLOCK_SPECIALIST_MODEL_ID`)
-3. **Global** environment variables (`BEDROCK_MODEL_ID`, `SHERLOCK_TEMPERATURE`)
+1. **Agent-specific** environment variables (e.g., `PROMPTRCA_LAMBDA_MODEL_ID`)
+2. **Category-specific** environment variables (e.g., `PROMPTRCA_SPECIALIST_MODEL_ID`)
+3. **Global** environment variables (`BEDROCK_MODEL_ID`, `PROMPTRCA_TEMPERATURE`)
 4. **Hardcoded** defaults
 
 #### Example Configurations
@@ -253,27 +253,27 @@ Override category settings for individual agents:
 **Example 1: Category-Level Configuration (Simplest)**
 ```bash
 # Configure entire categories with single settings
-SHERLOCK_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
-SHERLOCK_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-SHERLOCK_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+PROMPTRCA_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 ```
 
 **Example 2: Mixed Category and Agent-Specific**
 ```bash
 # All specialists use Haiku, except Lambda uses Sonnet
-SHERLOCK_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
-SHERLOCK_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-SHERLOCK_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_SPECIALIST_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+PROMPTRCA_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_ANALYSIS_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 ```
 
 **Example 3: Fine-Grained Control (Most Specific)**
 ```bash
 # Override specific agents as needed
-SHERLOCK_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
-SHERLOCK_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
-SHERLOCK_APIGATEWAY_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
-SHERLOCK_HYPOTHESIS_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
-SHERLOCK_ROOT_CAUSE_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_ORCHESTRATOR_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
+PROMPTRCA_LAMBDA_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
+PROMPTRCA_APIGATEWAY_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+PROMPTRCA_HYPOTHESIS_MODEL_ID=anthropic.claude-3-haiku-20240307-v1:0
+PROMPTRCA_ROOT_CAUSE_MODEL_ID=anthropic.claude-3-sonnet-20240229-v1:0
 ```
 
 ### AWS Configuration
@@ -287,7 +287,7 @@ Region detection follows this priority:
 
 ### AWS Knowledge MCP Server (Optional)
 
-Sherlock can integrate with the AWS Knowledge MCP Server to provide enhanced advice based on official AWS documentation, best practices, and regional availability information.
+PromptRCA can integrate with the AWS Knowledge MCP Server to provide enhanced advice based on official AWS documentation, best practices, and regional availability information.
 
 **Environment Variables:**
 - `ENABLE_AWS_KNOWLEDGE_MCP` - Enable/disable MCP integration (default: false)
@@ -307,15 +307,15 @@ Sherlock can integrate with the AWS Knowledge MCP Server to provide enhanced adv
 - Regional awareness for multi-region deployments
 - Reduced hallucinations in advice generation
 
-**Note:** This is an optional enhancement. Sherlock works perfectly without it, but provides richer advice when enabled.
+**Note:** This is an optional enhancement. PromptRCA works perfectly without it, but provides richer advice when enabled.
 
 - **Zero impact** when disabled - investigations work normally
 
 ### Example Configuration
 ```bash
 # Use a different model
-export SHERLOCK_MODEL_ID="anthropic.claude-3-sonnet-20240229-v1:0"
-export SHERLOCK_TEMPERATURE="0.3"
+export PROMPTRCA_MODEL_ID="anthropic.claude-3-sonnet-20240229-v1:0"
+export PROMPTRCA_TEMPERATURE="0.3"
 
 # Set region
 export AWS_REGION="us-east-1"
@@ -342,7 +342,7 @@ The function will perform actual AWS API calls and return investigation results.
 ## Docker Image Details
 
 - **Base Image**: `public.ecr.aws/lambda/python:3.13`
-- **Handler**: `sherlock.lambda_handler.lambda_handler`
+- **Handler**: `promptrca.lambda_handler.lambda_handler`
 - **Port**: 9000 (mapped to container port 8080)
 - **Working Directory**: `/var/task`
 
@@ -350,7 +350,7 @@ The function will perform actual AWS API calls and return investigation results.
 
 ```
 core/
-├── src/sherlock/           # Main package
+├── src/promptrca/           # Main package
 │   ├── tools/              # Service-specific tools
 │   │   ├── lambda_tools.py
 │   │   ├── apigateway_tools.py

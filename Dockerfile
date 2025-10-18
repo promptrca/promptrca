@@ -9,13 +9,13 @@ COPY requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/sherlock/ ${LAMBDA_TASK_ROOT}/sherlock/
+COPY src/promptrca/ ${LAMBDA_TASK_ROOT}/promptrca/
 
 # Set the Lambda handler
-CMD ["sherlock.lambda_handler.lambda_handler"]
+CMD ["promptrca.lambda_handler.lambda_handler"]
 
 # Add metadata labels
-LABEL maintainer="Sherlock Team"
+LABEL maintainer="PromptRCA Team"
 LABEL version="1.0.0"
 LABEL description="AI Root-Cause Investigator for AWS Serverless"
 

@@ -1,16 +1,16 @@
 services:
-  sherlock-server:
+  promptrca-server:
     build:
       context: .
       dockerfile: Dockerfile.server
-    container_name: sherlock-server
+    container_name: promptrca-server
     environment:
       - AWS_REGION=${AWS_REGION:-eu-west-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
-      - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
+      - PROMPTRCA_TEMPERATURE=${PROMPTRCA_TEMPERATURE:-0.7}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
       - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}
@@ -20,9 +20,9 @@ services:
     ports:
       - "8080:8080"
     networks:
-      - sherlock-network
+      - promptrca-network
     volumes:
-      - ./src/sherlock:/app/sherlock:ro  # Hot reloading for development
+      - ./src/promptrca:/app/promptrca:ro  # Hot reloading for development
     depends_on:
       - langfuse-web
     healthcheck:
@@ -36,28 +36,28 @@ services:
           memory: 512M
           cpus: '0.5'
 
-  sherlock-lambda:
+  promptrca-lambda:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sherlock-lambda
+    container_name: promptrca-lambda
     environment:
       - AWS_REGION=${AWS_REGION:-eu-west-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
-      - SHERLOCK_TEMPERATURE=${SHERLOCK_TEMPERATURE:-0.7}
+      - PROMPTRCA_TEMPERATURE=${PROMPTRCA_TEMPERATURE:-0.7}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
-      - OTEL_SERVICE_NAME=sherlock-lambda
+      - OTEL_SERVICE_NAME=promptrca-lambda
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
     ports:
       - "8081:8080"  # Lambda Runtime Interface Emulator port
     networks:
-      - sherlock-network
+      - promptrca-network
     depends_on:
       - langfuse-web
     deploy:
@@ -130,7 +130,7 @@ services:
       EMAIL_FROM_ADDRESS: ${EMAIL_FROM_ADDRESS:-}
       SMTP_CONNECTION_URL: ${SMTP_CONNECTION_URL:-}
     networks:
-      - sherlock-network
+      - promptrca-network
 
   langfuse-web:
     image: docker.io/langfuse/langfuse:3
@@ -145,7 +145,7 @@ services:
       # Removed LANGFUSE_INIT_* variables to prevent token reset on restart
       # Tokens are managed through the Langfuse UI and persisted in PostgreSQL
     networks:
-      - sherlock-network
+      - promptrca-network
 
   clickhouse:
     image: docker.io/clickhouse/clickhouse-server
@@ -169,7 +169,7 @@ services:
       retries: 10
       start_period: 1s
     networks:
-      - sherlock-network
+      - promptrca-network
 
   minio:
     image: docker.io/minio/minio
@@ -193,7 +193,7 @@ services:
       retries: 5
       start_period: 1s
     networks:
-      - sherlock-network
+      - promptrca-network
 
   redis:
     image: docker.io/redis:7
@@ -210,7 +210,7 @@ services:
       timeout: 10s
       retries: 10
     networks:
-      - sherlock-network
+      - promptrca-network
 
   postgres:
     image: docker.io/postgres:${POSTGRES_VERSION:-17}
@@ -232,7 +232,7 @@ services:
     volumes:
       - langfuse_postgres_data:/var/lib/postgresql/data
     networks:
-      - sherlock-network
+      - promptrca-network
 
 volumes:
   langfuse_postgres_data:
@@ -245,5 +245,5 @@ volumes:
     driver: local
 
 networks:
-  sherlock-network:
+  promptrca-network:
     driver: bridge

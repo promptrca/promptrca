@@ -17,12 +17,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install watchdog
 
 # Copy source code
-COPY src/sherlock/ /app/sherlock/
+COPY src/promptrca/ /app/promptrca/
 
 # Create non-root user for security
-RUN useradd --create-home --shell /bin/bash sherlock && \
-    chown -R sherlock:sherlock /app
-USER sherlock
+RUN useradd --create-home --shell /bin/bash promptrca && \
+    chown -R promptrca:promptrca /app
+USER promptrca
 
 # Expose port
 EXPOSE 8080
@@ -36,10 +36,10 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Run the HTTP server with hot reloading
-CMD ["python", "-m", "sherlock.server", "--port", "8080", "--reload"]
+CMD ["python", "-m", "promptrca.server", "--port", "8080", "--reload"]
 
 # Add metadata labels
-LABEL maintainer="Sherlock Team"
+LABEL maintainer="PromptRCA Team"
 LABEL version="1.0.0"
-LABEL description="Sherlock AI Root-Cause Investigator HTTP Server"
-LABEL service="sherlock-server"
+LABEL description="PromptRCA AI Root-Cause Investigator HTTP Server"
+LABEL service="promptrca-server"
