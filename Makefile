@@ -1,16 +1,16 @@
-# Sherlock Core - Docker Build and Run Makefile
+# PromptRCA Core - Docker Build and Run Makefile
 
 # Variables
-IMAGE_NAME = sherlock-core
+IMAGE_NAME = promptrca-core
 TAG = latest
 FULL_IMAGE = $(IMAGE_NAME):$(TAG)
-CONTAINER_NAME = sherlock-test
+CONTAINER_NAME = promptrca-test
 PORT = 9000
 
 # Default target
 .PHONY: help
 help: ## Show this help message
-	@echo "Sherlock Core - Docker Operations"
+	@echo "PromptRCA Core - Docker Operations"
 	@echo "================================="
 	@echo ""
 	@echo "Available targets:"
@@ -18,14 +18,14 @@ help: ## Show this help message
 
 .PHONY: build
 build: ## Build the Docker image
-	@echo "🔨 Building Sherlock Core Docker image..."
+	@echo "🔨 Building PromptRCA Core Docker image..."
 	@echo "Image: $(FULL_IMAGE)"
 	docker build -t $(FULL_IMAGE) .
 	@echo "✅ Build completed successfully!"
 
 .PHONY: run
 run: ## Run the container locally (with port mapping)
-	@echo "🚀 Starting Sherlock Core container..."
+	@echo "🚀 Starting PromptRCA Core container..."
 	@echo "Container: $(CONTAINER_NAME)"
 	@echo "Port: http://localhost:$(PORT)"
 	@echo ""
@@ -41,12 +41,12 @@ run: ## Run the container locally (with port mapping)
 
 .PHONY: run-detached
 run-detached: ## Run the container in background
-	@echo "🚀 Starting Sherlock Core container in background..."
+	@echo "🚀 Starting PromptRCA Core container in background..."
 	docker run -d --rm -p $(PORT):8080 --name $(CONTAINER_NAME) $(FULL_IMAGE)
 
 .PHONY: run-with-aws
 run-with-aws: ## Run container with AWS credentials from environment
-	@echo "🚀 Starting Sherlock Core container with AWS credentials..."
+	@echo "🚀 Starting PromptRCA Core container with AWS credentials..."
 	@echo "Container: $(CONTAINER_NAME)"
 	@echo "Port: http://localhost:$(PORT)"
 	@echo ""
@@ -69,7 +69,7 @@ run-with-aws: ## Run container with AWS credentials from environment
 
 .PHONY: run-with-aws-detached
 run-with-aws-detached: ## Run container with AWS credentials in background
-	@echo "🚀 Starting Sherlock Core container with AWS credentials in background..."
+	@echo "🚀 Starting PromptRCA Core container with AWS credentials in background..."
 	@echo "Make sure you have AWS credentials configured in your environment"
 	docker run -d --rm -p $(PORT):8080 --name $(CONTAINER_NAME) \
 		-e AWS_ACCESS_KEY_ID \
@@ -81,13 +81,13 @@ run-with-aws-detached: ## Run container with AWS credentials in background
 
 .PHONY: stop
 stop: ## Stop the running container
-	@echo "🛑 Stopping Sherlock Core container..."
+	@echo "🛑 Stopping PromptRCA Core container..."
 	-docker stop $(CONTAINER_NAME)
 	@echo "✅ Container stopped"
 
 .PHONY: test
 test: ## Test the Lambda function with a sample event
-	@echo "🧪 Testing Sherlock Core Lambda function..."
+	@echo "🧪 Testing PromptRCA Core Lambda function..."
 	@echo "Sending test event..."
 	curl -X POST "http://localhost:$(PORT)/2015-03-31/functions/function/invocations" \
 		-d '{"free_text_input": "Test Lambda function investigation"}' \

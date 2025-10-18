@@ -1,6 +1,6 @@
-# Langfuse Integration for Sherlock
+# Langfuse Integration for PromptRCA
 
-This document explains the Langfuse observability integration for Sherlock investigations.
+This document explains the Langfuse observability integration for PromptRCA investigations.
 
 ## What's Been Implemented
 
@@ -104,14 +104,14 @@ Use trace attributes to filter investigations:
 - **By agent type**: `agent.type = "lead_orchestrator"`
 - **By AWS service**: `aws.service = "lambda"`
 - **By region**: `agent.region = "eu-west-1"`
-- **By service**: `service.name = "sherlock-orchestrator"`
+- **By service**: `service.name = "promptrca-orchestrator"`
 
 ## Environment Variables
 
 ### Required for Tracing
 ```bash
 OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse:3000/ingest
-OTEL_SERVICE_NAME=sherlock-server  # or sherlock-lambda
+OTEL_SERVICE_NAME=promptrca-server  # or promptrca-lambda
 ```
 
 ### Optional for Development
@@ -143,18 +143,18 @@ LANGFUSE_ENCRYPTION_KEY=your-encryption-key-change-in-production
 
 2. **Check OTLP endpoint is set**:
    ```bash
-   docker-compose logs sherlock-server | grep "telemetry"
+   docker-compose logs promptrca-server | grep "telemetry"
    # Should see: "✅ Strands telemetry configured"
    ```
 
-3. **Check for errors in Sherlock logs**:
+3. **Check for errors in PromptRCA logs**:
    ```bash
-   docker-compose logs sherlock-server
+   docker-compose logs promptrca-server
    ```
 
 4. **Verify network connectivity**:
    ```bash
-   docker-compose exec sherlock-server ping -c 3 langfuse
+   docker-compose exec promptrca-server ping -c 3 langfuse
    ```
 
 ### Langfuse Won't Start
