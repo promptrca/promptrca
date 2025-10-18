@@ -66,6 +66,7 @@ class InvestigationContext:
     business_context: Dict[str, Any]
     time_range: Optional[Dict[str, str]] = None
     investigation_prompt: str = ""
+    start_time: Optional[datetime] = None
 
 
 class LeadOrchestratorAgent:
@@ -253,6 +254,9 @@ OUTPUT: Relay specialist findings"""
         logger.info(f"🔍 [DEBUG] LeadOrchestrator received assume_role_arn: {assume_role_arn}")
         logger.info(f"🔍 [DEBUG] LeadOrchestrator received external_id: {external_id}")
 
+        # Capture investigation start time
+        investigation_start_time = datetime.now(timezone.utc)
+
         # Generate investigation ID
         import time
         investigation_id = f"{int(time.time() * 1000)}.{hash(str(inputs)) % 10000}"
@@ -285,7 +289,7 @@ OUTPUT: Relay specialist findings"""
                 parsed_inputs = self._parse_inputs(inputs, region)
 
                 # 2. Build investigation context
-                context = self._build_investigation_context(parsed_inputs)
+                context = self._build_investigation_context(parsed_inputs, investigation_start_time)
 
                 # 2.5 ENRICH context by fetching X-Ray traces (NEW)
                 context = await self._enrich_context_with_traces(context)
@@ -294,7 +298,7 @@ OUTPUT: Relay specialist findings"""
                 if not context.primary_targets and not context.trace_ids:
                     logger.warning("Insufficient data: no resources or traces identified")
                     return self._create_insufficient_data_report(investigation_id, 
-                        "No AWS resources or trace IDs identified. Cannot investigate.")
+                        "No AWS resources or trace IDs identified. Cannot investigate.", investigation_start_time)
 
                 # 3. Create investigation prompt for lead agent
                 investigation_prompt = self._create_investigation_prompt(context)
@@ -337,7 +341,6 @@ OUTPUT: Relay specialist findings"""
                 
                 # Return error report
                 from ..models.base import InvestigationReport
-                from datetime import datetime, timezone
                 error_report = InvestigationReport(
                     run_id=investigation_id,
                     status="failed",
@@ -411,7 +414,7 @@ OUTPUT: Relay specialist findings"""
             
             return self.input_parser.parse_inputs(structured_input, region)
     
-    def _build_investigation_context(self, parsed_inputs: ParsedInputs) -> InvestigationContext:
+    def _build_investigation_context(self, parsed_inputs: ParsedInputs, start_time: Optional[datetime] = None) -> InvestigationContext:
         """Build investigation context from parsed inputs."""
         logger.info(f"🏗️ Building context for {len(parsed_inputs.primary_targets)} targets...")
         
@@ -420,7 +423,8 @@ OUTPUT: Relay specialist findings"""
             trace_ids=parsed_inputs.trace_ids,
             error_messages=parsed_inputs.error_messages,
             business_context=parsed_inputs.business_context,
-            time_range=parsed_inputs.time_range
+            time_range=parsed_inputs.time_range,
+            start_time=start_time
         )
     
     async def _enrich_context_with_traces(self, context: InvestigationContext) -> InvestigationContext:
@@ -727,19 +731,19 @@ OUTPUT: Relay specialist findings"""
         
         return json_blocks
     
-    def _create_insufficient_data_report(self, investigation_id: str, reason: str) -> InvestigationReport:
+    def _create_insufficient_data_report(self, investigation_id: str, reason: str, start_time: Optional[datetime] = None) -> InvestigationReport:
         """Create a report when there's insufficient data to investigate."""
         from ..models.base import InvestigationReport
-        from datetime import datetime, timezone
         
         now = datetime.now(timezone.utc)
+        actual_start_time = start_time or now
         
         return InvestigationReport(
             run_id=investigation_id,
             status="insufficient_data",
-            started_at=now,
+            started_at=actual_start_time,
             completed_at=now,
-            duration_seconds=0.0,
+            duration_seconds=(now - actual_start_time).total_seconds(),
             affected_resources=[],
             severity_assessment=None,
             facts=[],
@@ -759,7 +763,7 @@ OUTPUT: Relay specialist findings"""
         logger.info("📋 Generating investigation report...")
         
         now = datetime.now(timezone.utc)
-        start_time = now  # Simplified for now
+        start_time = context.start_time or now  # Use actual start time from context
         
         # Build affected resources from context
         affected_resources = []
