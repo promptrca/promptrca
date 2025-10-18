@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 
 from strands import Agent, tool
+
 from ..models import InvestigationReport, Fact, Hypothesis, Advice, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 from ..utils import normalize_facts, get_logger
 from ..utils.config import get_region, create_orchestrator_model, create_lambda_agent_model, create_apigateway_agent_model, create_stepfunctions_agent_model, create_iam_agent_model, create_dynamodb_agent_model, create_s3_agent_model, create_sqs_agent_model, create_sns_agent_model, create_eventbridge_agent_model, create_vpc_agent_model, create_hypothesis_agent_model, create_root_cause_agent_model
@@ -257,65 +258,79 @@ OUTPUT: Relay specialist findings"""
         investigation_id = f"{int(time.time() * 1000)}.{hash(str(inputs)) % 10000}"
 
 
-        try:
-            # 1. Parse inputs
-            parsed_inputs = self._parse_inputs(inputs, region)
-
-            # 2. Build investigation context
-            context = self._build_investigation_context(parsed_inputs)
-
-            # 2.5 ENRICH context by fetching X-Ray traces (NEW)
-            context = await self._enrich_context_with_traces(context)
-
-            # 2.6 Insufficient data check
-            if not context.primary_targets and not context.trace_ids:
-                logger.warning("Insufficient data: no resources or traces identified")
-                return self._create_insufficient_data_report(investigation_id, 
-                    "No AWS resources or trace IDs identified. Cannot investigate.")
-
-            # 3. Create investigation prompt for lead agent
-            investigation_prompt = self._create_investigation_prompt(context)
-            
-            # Debug: Log the prompt to see what the AI is receiving
-            logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
-
-            # 5. Run lead orchestrator agent
-            logger.info("🤖 Running lead orchestrator agent...")
-            agent_result = self.lead_agent(investigation_prompt)
-            
-            
-            # 6. Parse agent response and extract structured data
-            facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
-
-            # 7. Generate investigation report
-            report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
-
-
-            return report
+        # Create root span for entire investigation
+        from opentelemetry import trace
+        tracer = trace.get_tracer(__name__)
         
-        except Exception as e:
-            import traceback
-            logger.error(f"❌ Investigation failed: {e}")
-            logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+        with tracer.start_as_current_span(
+            "sherlock.investigation",
+            attributes={
+                "investigation.id": investigation_id,
+                "investigation.region": region,
+                "investigation.type": "multi_agent",
+                "investigation.assume_role_arn": assume_role_arn or "",
+                "investigation.external_id": external_id or ""
+            }
+        ) as investigation_span:
+
+            try:
+                # 1. Parse inputs
+                parsed_inputs = self._parse_inputs(inputs, region)
+
+                # 2. Build investigation context
+                context = self._build_investigation_context(parsed_inputs)
+
+                # 2.5 ENRICH context by fetching X-Ray traces (NEW)
+                context = await self._enrich_context_with_traces(context)
+
+                # 2.6 Insufficient data check
+                if not context.primary_targets and not context.trace_ids:
+                    logger.warning("Insufficient data: no resources or traces identified")
+                    return self._create_insufficient_data_report(investigation_id, 
+                        "No AWS resources or trace IDs identified. Cannot investigate.")
+
+                # 3. Create investigation prompt for lead agent
+                investigation_prompt = self._create_investigation_prompt(context)
+                
+                # Debug: Log the prompt to see what the AI is receiving
+                logger.info(f"🔍 DEBUG: Investigation prompt:\n{investigation_prompt}")
+
+                # 5. Run lead orchestrator agent
+                logger.info("🤖 Running lead orchestrator agent...")
+                agent_result = self.lead_agent(investigation_prompt)
             
-            # Return error report
-            from ..models.base import InvestigationReport
-            from datetime import datetime, timezone
-            return InvestigationReport(
-                run_id=investigation_id,
-                status="failed",
-                started_at=datetime.now(timezone.utc),
-                completed_at=datetime.now(timezone.utc),
-                duration_seconds=0.0,
-                affected_resources=[],
-                severity_assessment=None,
-                facts=[],
-                root_cause_analysis=None,
-                hypotheses=[],
-                advice=[],
-                timeline=[],
-                summary=f"Investigation failed: {str(e)}"
-            )
+                
+                # 6. Parse agent response and extract structured data
+                facts, hypotheses, advice = self._parse_agent_response(agent_result, context)
+
+                # 7. Generate investigation report
+                report = self._generate_investigation_report(context, facts, hypotheses, advice, region, assume_role_arn, external_id)
+
+                return report
+            
+            except Exception as e:
+                import traceback
+                logger.error(f"❌ Investigation failed: {e}")
+                logger.error(f"❌ Full traceback: {traceback.format_exc()}")
+                
+                # Return error report
+                from ..models.base import InvestigationReport
+                from datetime import datetime, timezone
+                return InvestigationReport(
+                    run_id=investigation_id,
+                    status="failed",
+                    started_at=datetime.now(timezone.utc),
+                    completed_at=datetime.now(timezone.utc),
+                    duration_seconds=0.0,
+                    affected_resources=[],
+                    severity_assessment=None,
+                    facts=[],
+                    root_cause_analysis=None,
+                    hypotheses=[],
+                    advice=[],
+                    timeline=[],
+                    summary=f"Investigation failed: {str(e)}"
+                )
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""

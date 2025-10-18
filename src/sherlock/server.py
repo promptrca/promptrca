@@ -28,29 +28,9 @@ import asyncio
 import base64
 from typing import Dict, Any
 
-# IMPORTANT: Set OTEL headers and initialize telemetry BEFORE any imports
-if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
-    credentials = f"{os.getenv('LANGFUSE_PUBLIC_KEY')}:{os.getenv('LANGFUSE_SECRET_KEY')}"
-    encoded_credentials = base64.b64encode(credentials.encode()).decode()
-    os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {encoded_credentials}"
-
-    # Initialize Strands telemetry BEFORE importing any Strands code
-    try:
-        from strands.telemetry import StrandsTelemetry
-        # Try traces-specific endpoint first, fall back to general endpoint
-        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-        if otlp_endpoint:
-            strands_telemetry = StrandsTelemetry()
-            headers = {"Authorization": f"Basic {encoded_credentials}"}
-            strands_telemetry.setup_otlp_exporter(endpoint=otlp_endpoint, headers=headers)
-
-            # Set up console exporter for development (optional)
-            if os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true":
-                strands_telemetry.setup_console_exporter()
-
-            print(f"✅ Strands telemetry initialized early: {os.getenv('OTEL_SERVICE_NAME', 'sherlock')} -> {otlp_endpoint}")
-    except Exception as e:
-        print(f"⚠️  Failed to initialize telemetry early: {e}")
+# IMPORTANT: Initialize telemetry BEFORE any imports
+from .utils.config import setup_strands_telemetry
+setup_strands_telemetry()
 
 from bedrock_agentcore import BedrockAgentCoreApp
 from starlette.responses import JSONResponse
