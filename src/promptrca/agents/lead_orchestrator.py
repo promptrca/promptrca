@@ -23,6 +23,7 @@ Lead Orchestrator Agent - Multi-Agent System for AWS Incident Investigation
 
 import asyncio
 import json
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -482,15 +483,10 @@ OUTPUT: Relay specialist findings"""
                 return report
             
             except Exception as e:
-                import traceback
                 logger.error(f"❌ Investigation failed: {e}")
-            
-            finally:
-                # Always clear AWS client context after investigation
-                clear_aws_client()
                 logger.error(f"❌ Full traceback: {traceback.format_exc()}")
                 
-                # Return error report
+                # Create error report
                 from ..models.base import InvestigationReport
                 error_report = InvestigationReport(
                     run_id=investigation_id,
@@ -523,6 +519,10 @@ OUTPUT: Relay specialist findings"""
                 investigation_span.set_attribute("error.message", str(e))
                 
                 return error_report
+            
+            finally:
+                # Always clear AWS client context after investigation
+                clear_aws_client()
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
@@ -595,7 +595,7 @@ OUTPUT: Relay specialist findings"""
             for trace_id in context.trace_ids:
                 try:
                     # Use the specialized tool to extract ALL resources from trace
-                    resources_json = get_all_resources_from_trace(trace_id, region=self.region)
+                    resources_json = get_all_resources_from_trace(trace_id)
                     resources_data = json.loads(resources_json)
                     
                     if "error" not in resources_data:
@@ -649,7 +649,7 @@ OUTPUT: Relay specialist findings"""
             # Add trace data for immediate analysis
             try:
                 from ..tools import get_xray_trace
-                trace_data = get_xray_trace(context.trace_ids[0], region=self.region)
+                trace_data = get_xray_trace(context.trace_ids[0])
                 if trace_data and "error" not in trace_data:
                     prompt_parts.append(f"\nTRACE DATA FOR ANALYSIS:")
                     prompt_parts.append(f"```json")
@@ -1031,7 +1031,7 @@ OUTPUT: Relay specialist findings"""
             from ..tools import get_xray_trace
             
             # Call the actual X-Ray trace tool
-            trace_json = get_xray_trace(trace_id, region=self.region)
+            trace_json = get_xray_trace(trace_id)
             trace_data = json.loads(trace_json)
             
             # Debug: Log the full trace data structure
