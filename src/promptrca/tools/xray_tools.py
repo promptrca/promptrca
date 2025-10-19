@@ -21,28 +21,28 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_xray_trace(trace_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_xray_trace(trace_id: str) -> str:
     """
     Get X-Ray trace details.
     
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace details
     """
-    import boto3
     
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('xray')
         response = client.batch_get_traces(TraceIds=[trace_id])
         
         if response.get('Traces'):
@@ -61,23 +61,23 @@ def get_xray_trace(trace_id: str, region: str = None) -> str:
 
 
 @tool
-def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_all_resources_from_trace(trace_id: str) -> str:
     """
     Extract ALL AWS resources involved in an X-Ray trace.
     This discovers Lambda functions, Step Functions, API Gateways, and other services.
 
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all discovered resources and their metadata
     """
-    import boto3
 
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('xray')
         response = client.batch_get_traces(TraceIds=[trace_id])
 
         if not response.get('Traces'):
@@ -162,24 +162,25 @@ def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
 
 
 @tool
-def get_xray_service_graph(service_name: str = None, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_xray_service_graph(service_name: str = None, hours_back: int = 1) -> str:
     """
     Get X-Ray service graph showing service dependencies.
     
     Args:
         service_name: Optional service name to filter by
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with service graph data
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('xray')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -209,8 +210,7 @@ def get_xray_service_graph(service_name: str = None, hours_back: int = 1, region
 
 
 @tool
-def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: str = None, region: str = None) -> str:
-    region = region or get_region()
+def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: str = None) -> str:
     """
     Get X-Ray trace summaries for a time range.
     
@@ -218,16 +218,18 @@ def get_xray_trace_summaries(start_time: str, end_time: str, filter_expression: 
         start_time: Start time in ISO format (e.g., "2024-01-01T00:00:00Z")
         end_time: End time in ISO format (e.g., "2024-01-01T23:59:59Z")
         filter_expression: Optional filter expression
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace summaries
     """
-    import boto3
-    from datetime import datetime
     
+    from datetime import datetime
+
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('xray')
         
         # Convert ISO strings to datetime objects
         start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))

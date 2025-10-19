@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_definition(state_machine_arn: str) -> str:
     """
     Get Step Functions state machine definition.
     
     Args:
         state_machine_arn: The state machine ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with state machine definition
     """
-    import boto3
-    
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
         response = client.describe_state_machine(stateMachineArn=state_machine_arn)
         
         config = {
@@ -62,24 +61,24 @@ def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> 
 
 
 @tool
-def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1) -> str:
     """
-    Get CloudWatch logs for a Step Functions state machine.
+    Get Step Functions execution logs for debugging and analysis.
     
     Args:
-        state_machine_arn: The Step Functions state machine ARN
-        hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
+        state_machine_arn: The state machine ARN
+        hours_back: Number of hours to look back for logs (default: 1)
     
     Returns:
-        JSON string with Step Functions log events
+        JSON string with execution logs
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('logs')
         
         # Extract state machine name from ARN
         state_machine_name = state_machine_arn.split(':')[-1]
@@ -129,23 +128,22 @@ def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: 
 
 
 @tool
-def get_stepfunctions_execution_details(execution_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_execution_details(execution_arn: str) -> str:
     """
-    Get detailed Step Functions execution information including status, input, output, and history.
-    Use this when you have a Step Functions execution ARN to investigate what happened.
-
+    Get detailed Step Functions execution information.
+    
     Args:
-        execution_arn: The Step Functions execution ARN
-        region: AWS region (default: from environment)
-
+        execution_arn: The execution ARN
+    
     Returns:
         JSON string with execution details including history events
     """
-    import boto3
-
+    
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
 
         # Get execution details
         exec_response = client.describe_execution(executionArn=execution_arn)
@@ -186,24 +184,25 @@ def get_stepfunctions_execution_details(execution_arn: str, region: str = None) 
 
 
 @tool
-def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24) -> str:
     """
-    Get CloudWatch metrics for a Step Functions state machine.
+    Get Step Functions metrics and performance data.
     
     Args:
-        state_machine_arn: The Step Functions state machine ARN
-        hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
+        state_machine_arn: The state machine ARN
+        hours_back: Number of hours to look back for metrics (default: 24)
     
     Returns:
-        JSON string with Step Functions metrics
+        JSON string with metrics data
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)

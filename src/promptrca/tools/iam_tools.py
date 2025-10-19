@@ -21,29 +21,29 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_iam_role_config(role_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_iam_role_config(role_name: str) -> str:
     """
     Get IAM role configuration including trust policy and attached policies.
     
     Args:
         role_name: The IAM role name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with role configuration
     """
-    import boto3
     from urllib.parse import unquote
     
     try:
-        client = boto3.client('iam', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('iam')
         
         # Get role details
         role_response = client.get_role(RoleName=role_name)
@@ -86,22 +86,22 @@ def get_iam_role_config(role_name: str, region: str = None) -> str:
 
 
 @tool
-def get_iam_policy_document(policy_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_iam_policy_document(policy_arn: str) -> str:
     """
     Get IAM policy document details.
     
     Args:
         policy_arn: The IAM policy ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with policy document details
     """
-    import boto3
     
     try:
-        client = boto3.client('iam', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('iam')
         
         # Get policy details
         policy_response = client.get_policy(PolicyArn=policy_arn)
@@ -132,8 +132,7 @@ def get_iam_policy_document(policy_arn: str, region: str = None) -> str:
 
 
 @tool
-def simulate_iam_policy(simulate: str, region: str = None) -> str:
-    region = region or get_region()
+def simulate_iam_policy(simulate: str) -> str:
     """
     Simulate IAM policy to check if an action is allowed.
     
@@ -141,16 +140,17 @@ def simulate_iam_policy(simulate: str, region: str = None) -> str:
         policy_document: The IAM policy document (JSON string)
         action: The action to test (e.g., "lambda:InvokeFunction")
         resource: The resource ARN to test (default: "*")
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with simulation results
     """
-    import boto3
     import json as json_lib
     
     try:
-        client = boto3.client('iam', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('iam')
         
         # Parse policy document if it's a string
         if isinstance(policy_document, str):
@@ -189,22 +189,22 @@ def simulate_iam_policy(simulate: str, region: str = None) -> str:
 
 
 @tool
-def get_iam_user_policies(user_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_iam_user_policies(user_name: str) -> str:
     """
     Get IAM user policies and permissions.
     
     Args:
         user_name: The IAM user name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with user policies
     """
-    import boto3
     
     try:
-        client = boto3.client('iam', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('iam')
         
         # Get user details
         user_response = client.get_user(UserName=user_name)

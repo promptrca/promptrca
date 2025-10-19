@@ -21,29 +21,30 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
+from typing import Optional
 import json
+from ..context import get_aws_client
 
 
 @tool
-def query_logs_by_trace_id(query: str, region: str = None) -> str:
-    region = region or get_region()
+def query_logs_by_trace_id(query: str) -> str:
     """
     Query CloudWatch Logs Insights for ALL logs related to a specific X-Ray trace ID.
     This is THE KEY tool for trace-driven investigation - it correlates logs with traces.
 
     Args:
         trace_id: The X-Ray trace ID to search for (e.g., "1-68e915e7-7a2c7c6d1427db5e5b97c431")
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all logs matching the trace ID across all log groups
     """
-    import boto3
     import time
     from datetime import datetime, timedelta
 
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('logs')
 
         # CloudWatch Insights query to find logs with this trace ID
         query = f'''
@@ -139,23 +140,21 @@ def query_logs_by_trace_id(query: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_execution_details(execution_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_execution_details(execution_arn: str) -> str:
     """
     Get detailed Step Functions execution information including status, input, output, and history.
     Use this when you have a Step Functions execution ARN to investigate what happened.
 
     Args:
         execution_arn: The Step Functions execution ARN
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with execution details including history events
     """
-    import boto3
-
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('stepfunctions')
 
         # Get execution details
         exec_response = client.describe_execution(executionArn=execution_arn)
@@ -196,8 +195,7 @@ def get_stepfunctions_execution_details(execution_arn: str, region: str = None) 
 
 
 @tool
-def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
-    region = region or get_region()
+def resolve_api_gateway_id(resolve: str) -> str:
     """
     Resolve API Gateway name or ID to the actual REST API ID.
     Handles both cases:
@@ -206,12 +204,10 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
     Args:
         api_name_or_id: API Gateway name or ID
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with the REST API ID
     """
-    import boto3
     import re
 
     try:
@@ -225,7 +221,9 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
             })
 
         # Otherwise, search for it by name
-        client = boto3.client('apigateway', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('apigateway')
 
         # List all REST APIs and find by name
         paginator = client.get_paginator('get_rest_apis')
@@ -251,23 +249,21 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
 
 @tool
-def get_all_resources_from_trace(trace_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_all_resources_from_trace(trace_id: str) -> str:
     """
     Extract ALL AWS resources involved in an X-Ray trace.
     This discovers Lambda functions, Step Functions, API Gateways, and other services.
 
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all discovered resources and their metadata
     """
-    import boto3
-
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('xray')
         response = client.batch_get_traces(TraceIds=[trace_id])
 
         if not response.get('Traces'):

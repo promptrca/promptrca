@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_s3_bucket_config(bucket_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_s3_bucket_config(bucket_name: str) -> str:
     """
     Get S3 bucket configuration and properties.
     
     Args:
         bucket_name: The S3 bucket name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('s3', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('s3')
         
         # Get bucket location
         location_response = client.get_bucket_location(Bucket=bucket_name)
@@ -91,24 +90,21 @@ def get_s3_bucket_config(bucket_name: str, region: str = None) -> str:
 
 
 @tool
-def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for an S3 bucket.
     
     Args:
         bucket_name: The S3 bucket name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket metrics
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -159,8 +155,7 @@ def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24, region: str = 
 
 
 @tool
-def list_s3_bucket_objects(list: str, region: str = None) -> str:
-    region = region or get_region()
+def list_s3_bucket_objects(list: str) -> str:
     """
     List S3 bucket objects (for debugging purposes).
     
@@ -168,15 +163,15 @@ def list_s3_bucket_objects(list: str, region: str = None) -> str:
         bucket_name: The S3 bucket name
         prefix: Object key prefix to filter by
         max_keys: Maximum number of objects to return (default: 100)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with object list
     """
-    import boto3
-    
     try:
-        client = boto3.client('s3', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('s3')
         
         kwargs = {
             'Bucket': bucket_name,
@@ -213,22 +208,21 @@ def list_s3_bucket_objects(list: str, region: str = None) -> str:
 
 
 @tool
-def get_s3_bucket_policy(bucket_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_s3_bucket_policy(bucket_name: str) -> str:
     """
     Get S3 bucket policy.
     
     Args:
         bucket_name: The S3 bucket name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with bucket policy
     """
-    import boto3
-    
     try:
-        client = boto3.client('s3', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('s3')
         
         response = client.get_bucket_policy(Bucket=bucket_name)
         policy = response.get('Policy')

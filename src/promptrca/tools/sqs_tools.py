@@ -23,26 +23,25 @@ Contact: christiangenn99+promptrca@gmail.com
 from strands import tool
 from typing import Dict, Any
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_sqs_queue_config(queue_url: str, region: str = None) -> str:
-    region = region or get_region()
+def get_sqs_queue_config(queue_url: str) -> str:
     """
     Get SQS queue configuration and attributes.
     
     Args:
         queue_url: The SQS queue URL
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('sqs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sqs')
         
         response = client.get_queue_attributes(
             QueueUrl=queue_url,
@@ -73,24 +72,21 @@ def get_sqs_queue_config(queue_url: str, region: str = None) -> str:
 
 
 @tool
-def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for an SQS queue.
     
     Args:
         queue_name: The SQS queue name (without URL)
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue metrics
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -138,22 +134,21 @@ def get_sqs_queue_metrics(queue_name: str, hours_back: int = 24, region: str = N
 
 
 @tool
-def get_sqs_dead_letter_queue(queue_url: str, region: str = None) -> str:
-    region = region or get_region()
+def get_sqs_dead_letter_queue(queue_url: str) -> str:
     """
     Get SQS dead letter queue configuration.
     
     Args:
         queue_url: The SQS queue URL
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with DLQ configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('sqs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sqs')
         
         response = client.get_queue_attributes(
             QueueUrl=queue_url,
@@ -215,22 +210,21 @@ def get_sqs_dead_letter_queue(queue_url: str, region: str = None) -> str:
 
 
 @tool
-def list_sqs_queues(list: str, region: str = None) -> str:
-    region = region or get_region()
+def list_sqs_queues(list: str) -> str:
     """
     List SQS queues in the region.
     
     Args:
         prefix: Optional prefix to filter queue names
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with queue list
     """
-    import boto3
-    
     try:
-        client = boto3.client('sqs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sqs')
         
         kwargs = {}
         if prefix:

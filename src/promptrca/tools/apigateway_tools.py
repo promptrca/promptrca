@@ -21,14 +21,13 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_api_gateway_stage_config(api_id: str, stage_name: str) -> str:
     """
     Retrieve comprehensive API Gateway stage configuration for integration and routing analysis.
     
@@ -83,10 +82,12 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = Non
     
     Note: This tool examines the current stage configuration, not historical changes.
     """
-    import boto3
-
+    
     try:
-        client = boto3.client('apigateway', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('apigateway')
 
         # Get stage config
         stage_response = client.get_stage(
@@ -157,8 +158,7 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = Non
 
 
 @tool
-def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1) -> str:
     """
     Retrieve CloudWatch logs for API Gateway request/response analysis and error debugging.
     
@@ -202,11 +202,14 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
     
     Note: Logs are retrieved from the most recent log streams to ensure relevance.
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         # API Gateway log group format
         log_group = f"API-Gateway-Execution-Logs_{api_id}/{stage_name}"
@@ -253,8 +256,7 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
 
 
 @tool
-def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
-    region = region or get_region()
+def resolve_api_gateway_id(resolve: str) -> str:
     """
     Resolve API Gateway name or ID to the actual REST API ID.
     Handles both cases:
@@ -263,15 +265,15 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
     Args:
         api_name_or_id: API Gateway name or ID
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with the REST API ID
     """
-    import boto3
     import re
 
     try:
+        # Get AWS client from context
+        aws_client = get_aws_client()
         # Check if it's already a REST API ID format (alphanumeric, typically 10 chars)
         # REST API IDs look like: 142gh05m9a, abc123xyz, etc.
         if re.match(r'^[a-z0-9]{10}$', api_name_or_id):
@@ -282,7 +284,7 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
             })
 
         # Otherwise, search for it by name
-        client = boto3.client('apigateway', region_name=region)
+        client = aws_client.get_client('apigateway')
 
         # List all REST APIs and find by name
         paginator = client.get_paginator('get_rest_apis')
@@ -308,8 +310,7 @@ def resolve_api_gateway_id(resolve: str, region: str = None) -> str:
 
 
 @tool
-def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for an API Gateway.
     
@@ -317,16 +318,17 @@ def get_api_gateway_metrics(api_id: str, stage_name: str = "test", hours_back: i
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with API Gateway metrics
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)

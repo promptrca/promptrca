@@ -21,14 +21,13 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_lambda_config(function_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_config(function_name: str) -> str:
     """
     Get comprehensive Lambda function configuration for root cause analysis.
     
@@ -42,7 +41,6 @@ def get_lambda_config(function_name: str, region: str = None) -> str:
     
     Args:
         function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
-        region: AWS region (default: from environment config)
     
     Returns:
         JSON string containing:
@@ -70,10 +68,11 @@ def get_lambda_config(function_name: str, region: str = None) -> str:
         - Runtime compatibility issues (check runtime version)
         - Environment variable problems (verify env vars are set correctly)
     """
-    import boto3
-    
     try:
-        client = boto3.client('lambda', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('lambda')
         response = client.get_function_configuration(FunctionName=function_name)
         
         config = {
@@ -96,8 +95,7 @@ def get_lambda_config(function_name: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_logs(function_name: str, hours_back: int = 1) -> str:
     """
     Retrieve CloudWatch logs for Lambda function error analysis and debugging.
     
@@ -108,7 +106,6 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None)
     Args:
         function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
         hours_back: Number of hours to look back for logs (default: 1, max recommended: 24)
-        region: AWS region (default: from environment config)
     
     Returns:
         JSON string containing:
@@ -139,11 +136,13 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None)
     
     Note: Logs are retrieved from the most recent log streams to ensure relevance.
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         # Lambda log group format
         log_group = f"/aws/lambda/{function_name}"
@@ -189,8 +188,7 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None)
 
 
 @tool
-def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_metrics(function_name: str, hours_back: int = 24) -> str:
     """
     Retrieve CloudWatch metrics for Lambda function performance analysis.
     
@@ -201,7 +199,6 @@ def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = N
     Args:
         function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
         hours_back: Number of hours to look back for metrics (default: 24)
-        region: AWS region (default: from environment config)
     
     Returns:
         JSON string containing:
@@ -231,11 +228,13 @@ def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = N
     
     Note: Metrics are aggregated in 1-hour periods for the specified time range.
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -282,8 +281,7 @@ def get_lambda_metrics(function_name: str, hours_back: int = 24, region: str = N
 
 
 @tool
-def get_lambda_layers(function_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_layers(function_name: str) -> str:
     """
     Retrieve Lambda function layer information for dependency analysis.
     
@@ -293,7 +291,6 @@ def get_lambda_layers(function_name: str, region: str = None) -> str:
     
     Args:
         function_name: The Lambda function name (e.g., "my-function", "prod-api-handler")
-        region: AWS region (default: from environment config)
     
     Returns:
         JSON string containing:
@@ -320,10 +317,11 @@ def get_lambda_layers(function_name: str, region: str = None) -> str:
     
     Note: Layer information is retrieved from the function configuration.
     """
-    import boto3
-    
     try:
-        client = boto3.client('lambda', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('lambda')
         response = client.get_function_configuration(FunctionName=function_name)
         
         layers = response.get('Layers', [])

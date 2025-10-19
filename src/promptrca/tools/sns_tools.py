@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_sns_topic_config(topic_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_sns_topic_config(topic_arn: str) -> str:
     """
     Get SNS topic configuration and attributes.
     
     Args:
         topic_arn: The SNS topic ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('sns', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sns')
         
         response = client.get_topic_attributes(TopicArn=topic_arn)
         attributes = response.get('Attributes', {})
@@ -70,24 +69,21 @@ def get_sns_topic_config(topic_arn: str, region: str = None) -> str:
 
 
 @tool
-def get_sns_topic_metrics(topic_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_sns_topic_metrics(topic_name: str, hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for an SNS topic.
     
     Args:
         topic_name: The SNS topic name (without ARN)
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic metrics
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -135,22 +131,21 @@ def get_sns_topic_metrics(topic_name: str, hours_back: int = 24, region: str = N
 
 
 @tool
-def get_sns_subscriptions(topic_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_sns_subscriptions(topic_arn: str) -> str:
     """
     Get SNS topic subscriptions.
     
     Args:
         topic_arn: The SNS topic ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with subscription details
     """
-    import boto3
-    
     try:
-        client = boto3.client('sns', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sns')
         
         response = client.list_subscriptions_by_topic(TopicArn=topic_arn)
         subscriptions = response.get('Subscriptions', [])
@@ -176,21 +171,20 @@ def get_sns_subscriptions(topic_arn: str, region: str = None) -> str:
 
 
 @tool
-def list_sns_topics(list: str, region: str = None) -> str:
-    region = region or get_region()
+def list_sns_topics(list: str) -> str:
     """
     List SNS topics in the region.
     
     Args:
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with topic list
     """
-    import boto3
-    
     try:
-        client = boto3.client('sns', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('sns')
         
         response = client.list_topics()
         topics = response.get('Topics', [])
