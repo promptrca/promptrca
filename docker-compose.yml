@@ -2,7 +2,7 @@ services:
   promptrca-server:
     build:
       context: .
-      dockerfile: Dockerfile.server
+      dockerfile: Dockerfile.dev
     container_name: promptrca-server
     environment:
       - AWS_REGION=${AWS_REGION:-eu-west-1}
@@ -30,36 +30,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-
-  promptrca-lambda:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: promptrca-lambda
-    environment:
-      - AWS_REGION=${AWS_REGION:-eu-west-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
-      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
-      - PROMPTRCA_TEMPERATURE=${PROMPTRCA_TEMPERATURE:-0.7}
-      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
-      - OTEL_SERVICE_NAME=promptrca-lambda
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=${LANGFUSE_HOST}
-    ports:
-      - "8081:8080"  # Lambda Runtime Interface Emulator port
-    networks:
-      - promptrca-network
-    depends_on:
-      - langfuse-web
     deploy:
       resources:
         limits:

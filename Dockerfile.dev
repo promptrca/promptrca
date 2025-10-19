@@ -1,5 +1,5 @@
-# Use Python 3.13 slim image for production server
-FROM python:3.13-slim
+# Use Python 3.13 image for development with hot reloading
+FROM python:3.13
 
 # Set working directory
 WORKDIR /app
@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install watchdog for hot reloading
+RUN pip install watchdog
 
 # Copy source code
 COPY src/promptrca/ /app/promptrca/
@@ -26,17 +29,17 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8080/ping || exit 1
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Run the HTTP server (production - no hot reloading)
-CMD ["python", "-m", "promptrca.server", "--port", "8080"]
+# Run the HTTP server with hot reloading
+CMD ["python", "-m", "promptrca.server", "--port", "8080", "--reload"]
 
 # Add metadata labels
 LABEL maintainer="PromptRCA Team"
 LABEL version="1.0.0"
-LABEL description="PromptRCA AI Root-Cause Investigator HTTP Server (Production)"
+LABEL description="PromptRCA AI Root-Cause Investigator HTTP Server"
 LABEL service="promptrca-server"
