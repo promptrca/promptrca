@@ -128,19 +128,19 @@ def _handle_free_text_investigation(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle free text investigation using multi-agent orchestration."""
+    """Handle free text investigation using direct invocation orchestration."""
     try:
-        from .agents.lead_orchestrator import LeadOrchestratorAgent
+        from .core.direct_orchestrator import DirectInvocationOrchestrator
 
-        # Initialize lead orchestrator agent
-        orchestrator = LeadOrchestratorAgent(strands_agent.model)
+        # Initialize direct invocation orchestrator (code-based, not AI-based)
+        orchestrator = DirectInvocationOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "free_text_input": free_text
         }
 
-        # Run multi-agent investigation (async)
+        # Run direct invocation investigation (async)
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
@@ -167,19 +167,19 @@ def _handle_investigation_inputs(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle investigation_inputs using multi-agent orchestration."""
+    """Handle investigation_inputs using direct invocation orchestration."""
     try:
-        from .agents.lead_orchestrator import LeadOrchestratorAgent
+        from .core.direct_orchestrator import DirectInvocationOrchestrator
 
-        # Initialize lead orchestrator agent
-        orchestrator = LeadOrchestratorAgent(strands_agent.model)
+        # Initialize direct invocation orchestrator (code-based, not AI-based)
+        orchestrator = DirectInvocationOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "investigation_inputs": investigation_inputs
         }
 
-        # Run multi-agent investigation (async)
+        # Run direct invocation investigation (async)
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response

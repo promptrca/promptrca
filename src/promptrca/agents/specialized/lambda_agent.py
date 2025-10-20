@@ -35,6 +35,13 @@ from ...tools.lambda_tools import (
     get_lambda_failed_invocations,
     get_lambda_version_history
 )
+from ...tools.cloudtrail_tools import (
+    get_recent_cloudtrail_events,
+    get_iam_policy_changes
+)
+from ...tools.aws_health_tools import (
+    check_aws_service_health
+)
 
 
 def create_lambda_agent(model) -> Agent:
@@ -64,10 +71,12 @@ INVESTIGATION METHODOLOGY (follow these steps sequentially):
    - Invocation metrics
 
 4. **Detailed Historical Review**:
+   - **USE get_recent_cloudtrail_events() to check for recent Lambda configuration changes**
    - Check for similar past incidents with this function
-   - Review recent deployment history and code changes
+   - Review recent deployment history and code changes (UpdateFunctionCode, UpdateFunctionConfiguration)
    - Examine configuration change timeline (environment variables, IAM role updates, timeout/memory adjustments)
    - Identify any correlated infrastructure changes
+   - **USE get_iam_policy_changes() if permission errors detected**
 
 5. **Environmental Variables and Changes**:
    - Analyze recent configuration updates with specific timestamps

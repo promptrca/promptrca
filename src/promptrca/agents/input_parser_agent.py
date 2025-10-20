@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from ..models import Fact
 from ..utils import get_logger
 from strands import Agent
-from ..utils.config import create_bedrock_model
+from ..utils.config import create_bedrock_model, create_parser_model
 
 logger = get_logger(__name__)
 
@@ -73,12 +73,15 @@ class InputParserAgent:
     """Agent that parses various input formats to extract investigation targets."""
     
     def __init__(self):
-        """Initialize the input parser agent."""
-        # Initialize AI model for intelligent parsing
-        self.model = create_bedrock_model()
+        """Initialize the input parser agent.
+
+        Deterministic-first parsing; fallback uses a constrained, low-temp model.
+        """
+        # Dedicated constrained model for fallback parsing only
+        self.parser_model = create_parser_model()
         
-        # X-Ray trace ID pattern (reliable regex)
-        self.trace_id_pattern = r'1-[a-f0-9]{8}-[a-f0-9]{24}'
+        # X-Ray trace ID pattern (reliable regex) - handles optional Root= prefix
+        self.trace_id_pattern = r'(?:Root=)?(1-[a-f0-9]{8}-[a-f0-9]{24})'
         
         # ARN pattern (reliable regex)
         self.arn_pattern = r'arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]*:[a-zA-Z0-9/_-]+'
@@ -97,47 +100,64 @@ class InputParserAgent:
     def parse_inputs(self, inputs: Union[str, Dict[str, Any]], region: str = "eu-west-1") -> ParsedInputs:
         """Parse various input formats to extract investigation targets."""
         if isinstance(inputs, str):
-            return self._parse_free_text(inputs, region)
+            # Deterministic first from free text: extract trace IDs and ARNs.
+            # If nothing is found, fall back to constrained parser model.
+            parsed = self._parse_free_text_deterministic(inputs, region)
+            if (not parsed.primary_targets) and (not parsed.trace_ids):
+                return self._parse_free_text_with_fallback_agent(inputs, region)
+            return parsed
         elif isinstance(inputs, dict):
             return self._parse_structured_input(inputs, region)
         else:
             raise ValueError("Input must be string (free text) or dict (structured)")
     
-    def _parse_free_text(self, text: str, region: str) -> ParsedInputs:
-        """Parse free text input using AI-based extraction."""
-        logger.info("🔍 Parsing free text input with AI...")
-        
-        # Extract X-Ray trace IDs and ARNs (reliable with regex)
+    def _parse_free_text_deterministic(self, text: str, region: str) -> ParsedInputs:
+        """Parse free text with regex-only extraction; no AI usage."""
+        logger.info("🔍 Parsing free text input deterministically (regex-only)...")
         trace_ids = re.findall(self.trace_id_pattern, text)
         arns = re.findall(self.arn_pattern, text)
-        
-        # Use AI to intelligently extract AWS resources
-        ai_extracted_resources = self._ai_extract_resources(text, region, arns)
-        
-        # Validate each extracted resource
-        primary_targets = []
-        for resource in ai_extracted_resources:
-            if self._validate_resource(resource, region):
-                primary_targets.append(resource)
-            else:
-                logger.warning(f"Discarding invalid resource: {resource.type}:{resource.name}")
-        
-        # Extract error messages and context with AI
-        error_messages = self._ai_extract_errors(text)
-        
-        # Extract business context
-        business_context = self._extract_business_context(text)
-        
-        # Extract time range if mentioned
-        time_range = self._extract_time_range(text)
-        
+        primary_targets: List[ParsedResource] = []
+        for arn in arns:
+            r_type, r_name = self._parse_arn(arn)
+            if r_type and r_name:
+                primary_targets.append(ParsedResource(
+                    type=r_type,
+                    name=r_name,
+                    region=region,
+                    arn=arn,
+                    confidence=0.95,
+                    source="arn_parsing",
+                    metadata={"arn": arn}
+                ))
+        # Minimal error extraction without AI
+        error_messages = [m.group(0) for m in re.finditer(r"(Error|Exception|Timed out|AccessDenied)[^\n]{0,200}", text, flags=re.IGNORECASE)]
         return ParsedInputs(
             primary_targets=primary_targets,
             trace_ids=trace_ids,
             error_messages=error_messages,
-            business_context=business_context,
-            time_range=time_range,
-            confidence=0.9  # Higher confidence with AI
+            business_context=self._extract_business_context(text),
+            time_range=self._extract_time_range(text),
+            confidence=0.85
+        )
+
+    def _parse_free_text_with_fallback_agent(self, text: str, region: str) -> ParsedInputs:
+        """Use constrained parser agent only if deterministic parsing found nothing."""
+        logger.info("🔍 Deterministic parsing found nothing; using constrained parser agent...")
+        # Extract ARNs for hints
+        arns = re.findall(self.arn_pattern, text)
+        ai_extracted_resources = self._ai_extract_resources(text, region, arns, use_parser_model=True)
+        primary_targets: List[ParsedResource] = []
+        for resource in ai_extracted_resources:
+            if self._validate_resource(resource, region):
+                primary_targets.append(resource)
+        error_messages = self._ai_extract_errors(text, use_parser_model=True)
+        return ParsedInputs(
+            primary_targets=primary_targets,
+            trace_ids=re.findall(self.trace_id_pattern, text),
+            error_messages=error_messages,
+            business_context=self._extract_business_context(text),
+            time_range=self._extract_time_range(text),
+            confidence=0.8
         )
     
     def _extract_json(self, s: str):
@@ -168,7 +188,7 @@ class InputParserAgent:
             logger.error(f"JSON extraction failed: {e}")
             return None
 
-    def _ai_extract_resources(self, text: str, region: str, arns: List[str]) -> List[ParsedResource]:
+    def _ai_extract_resources(self, text: str, region: str, arns: List[str], use_parser_model: bool = False) -> List[ParsedResource]:
         """Use AI to extract AWS resource names and types from free text."""
         prompt = f"""Extract AWS resource identifiers from text: {text}
 
@@ -183,7 +203,7 @@ OUTPUT: JSON [{{"type": "service_type", "name": "resource_name", "arn": "arn_if_
 Return [] if no explicit resources found."""
 
         try:
-            agent = Agent(model=self.model)
+            agent = Agent(model=self.parser_model if use_parser_model else create_bedrock_model(temperature_override=0.2))
             response = agent(prompt)
             
             # Parse the AI response - extract content from AgentResult
@@ -247,7 +267,7 @@ Return [] if no explicit resources found."""
             logger.debug(f"Validation failed for {resource.name}: {e}")
             return False
     
-    def _ai_extract_errors(self, text: str) -> List[str]:
+    def _ai_extract_errors(self, text: str, use_parser_model: bool = False) -> List[str]:
         """Use AI to extract error messages and issue descriptions."""
         prompt = f"""Extract error messages from: {text}
 
@@ -255,7 +275,7 @@ OUTPUT: JSON array of error descriptions
 Example: ["500 errors", "Permission denied"]"""
 
         try:
-            agent = Agent(model=self.model)
+            agent = Agent(model=self.parser_model if use_parser_model else create_bedrock_model(temperature_override=0.2))
             response = agent(prompt)
             
             # Extract content from AgentResult

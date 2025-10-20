@@ -144,3 +144,6 @@ Thumbs.db
 
 # Papers and research documents
 papers/
+
+# Investigation results (may contain sensitive data)
+investigations/

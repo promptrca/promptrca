@@ -1,0 +1,265 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PromptRCACorePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "xray:GetTraceSummaries",
+        "xray:BatchGetTraces",
+        "xray:GetServiceGraph",
+        "xray:GetTraceGraph",
+        "xray:GetGroups",
+        "xray:GetGroup",
+        "xray:GetInsightSummaries",
+        "xray:GetInsight",
+        "xray:GetInsightEvents",
+        "xray:GetInsightImpactGraph"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": [
+            "us-east-1",
+            "us-west-1", 
+            "us-west-2",
+            "eu-west-1",
+            "eu-west-2",
+            "eu-west-3",
+            "eu-central-1",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "ap-northeast-1",
+            "ap-south-1"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "PromptRCALambdaPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListFunctions",
+        "lambda:GetAlias",
+        "lambda:ListAliases",
+        "lambda:GetLayerVersion",
+        "lambda:ListLayerVersions",
+        "lambda:GetProvisionedConcurrencyConfig",
+        "lambda:ListProvisionedConcurrencyConfigs",
+        "lambda:GetFunctionEventInvokeConfig",
+        "lambda:ListFunctionEventInvokeConfigs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAAPIGatewayPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAStepFunctionsPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "states:DescribeStateMachine",
+        "states:ListStateMachines",
+        "states:DescribeExecution",
+        "states:ListExecutions",
+        "states:GetExecutionHistory",
+        "states:DescribeActivity",
+        "states:ListActivities"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAIAMPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:GetUser",
+        "iam:GetUserPolicy",
+        "iam:ListAttachedUserPolicies",
+        "iam:ListUserPolicies",
+        "iam:ListRoles",
+        "iam:ListUsers"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCACloudWatchLogsPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:GetLogGroupFields",
+        "logs:GetQueryResults",
+        "logs:StartQuery",
+        "logs:StopQuery"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCACloudWatchMetricsPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetInsightRuleReport",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:DescribeAlarmHistory"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCADynamoDBPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:DescribeTable",
+        "dynamodb:ListTables",
+        "dynamodb:DescribeTableReplicaAutoScaling",
+        "dynamodb:DescribeTimeToLive",
+        "dynamodb:ListTagsOfResource",
+        "dynamodb:DescribeContinuousBackups",
+        "dynamodb:DescribeGlobalTable",
+        "dynamodb:DescribeGlobalTableSettings"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAS3Permissions",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:ListBucket",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCors",
+        "s3:GetBucketLifecycleConfiguration",
+        "s3:GetBucketLogging",
+        "s3:GetBucketNotification",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketTagging",
+        "s3:GetBucketWebsite",
+        "s3:GetObject",
+        "s3:GetObjectAcl",
+        "s3:GetObjectTagging",
+        "s3:GetObjectVersion",
+        "s3:GetObjectVersionAcl",
+        "s3:GetObjectVersionTagging"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCASQSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:GetQueueAttributes",
+        "sqs:ListQueues",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueueTags",
+        "sqs:GetQueuePolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCASNSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "sns:GetTopicAttributes",
+        "sns:ListTopics",
+        "sns:ListTagsForResource",
+        "sns:GetSubscriptionAttributes",
+        "sns:ListSubscriptions",
+        "sns:ListSubscriptionsByTopic"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAEventBridgePermissions",
+      "Effect": "Allow",
+      "Action": [
+        "events:ListRules",
+        "events:ListTargetsByRule",
+        "events:DescribeRule",
+        "events:ListTagsForResource",
+        "events:DescribeEventBus",
+        "events:ListEventBuses"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAVPCPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeInternetGateways",
+        "ec2:DescribeNatGateways",
+        "ec2:DescribeVpcEndpoints",
+        "ec2:DescribeVpcPeeringConnections"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCAEC2Permissions",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeInstances",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeInstanceAttribute",
+        "ec2:DescribeImages",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeKeyPairs",
+        "ec2:DescribePlacementGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCARDSPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBClusters",
+        "rds:DescribeDBSubnetGroups",
+        "rds:DescribeDBParameterGroups",
+        "rds:DescribeDBParameters",
+        "rds:DescribeEventSubscriptions",
+        "rds:DescribeEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PromptRCASESPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "ses:GetSendQuota",
+        "ses:GetSendStatistics",
+        "ses:ListIdentities",
+        "ses:GetIdentityVerificationAttributes",
+        "ses:GetIdentityDkimAttributes",
+        "ses:GetIdentityMailFromDomainAttributes"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

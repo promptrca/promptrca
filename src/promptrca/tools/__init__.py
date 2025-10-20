@@ -120,6 +120,19 @@ from .vpc_tools import (
     get_internet_gateway_config
 )
 
+# AWS Health and CloudTrail tools
+from .aws_health_tools import (
+    check_aws_service_health,
+    get_account_health_events,
+    check_service_quota_status
+)
+
+from .cloudtrail_tools import (
+    get_recent_cloudtrail_events,
+    find_correlated_changes,
+    get_iam_policy_changes
+)
+
 # AWS Knowledge MCP tools (optional) - conditionally imported based on feature flag
 try:
     from .aws_knowledge_tools import (
@@ -209,6 +222,14 @@ __all__ = [
     'get_network_interface_config',
     'get_nat_gateway_config',
     'get_internet_gateway_config',
+    
+    # AWS Health and CloudTrail tools
+    'check_aws_service_health',
+    'get_account_health_events',
+    'check_service_quota_status',
+    'get_recent_cloudtrail_events',
+    'find_correlated_changes',
+    'get_iam_policy_changes',
     
     # AWS Knowledge MCP tools (only if available)
     *(['search_aws_documentation', 'read_aws_documentation', 'get_aws_documentation_recommendations', 'list_aws_regions', 'get_service_regional_availability'] if _aws_knowledge_tools_available else [])

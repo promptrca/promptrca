@@ -28,14 +28,21 @@ import json
 
 from ..models import InvestigationReport, InvestigationTarget, Fact, Hypothesis, Advice, SeverityAssessment, RootCauseAnalysis
 from ..clients import AWSClient
-from ..agents.lead_orchestrator import LeadOrchestratorAgent
+from ..core.direct_orchestrator import DirectInvocationOrchestrator
 from ..utils.config import get_region
+from ..utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class PromptRCAInvestigator:
-    """Main PromptRCA AI investigator class."""
-    
-    def __init__(self, region: str = None, 
+    """
+    Main PromptRCA AI investigator class.
+
+    Uses only the Direct Invocation orchestrator (code-based). Legacy orchestrator removed.
+    """
+
+    def __init__(self, region: str = None,
                  xray_trace_id: str = None, investigation_target: Dict[str, Any] = None, strands_agent=None,
                  assume_role_arn: str = None, external_id: str = None):
         """Initialize the investigator."""
@@ -46,23 +53,35 @@ class PromptRCAInvestigator:
         self.investigation_target = InvestigationTarget(**investigation_target) if investigation_target else None
         self.assume_role_arn = assume_role_arn
         self.external_id = external_id
-        
-        
+
+
         # Initialize AWS client with optional role assumption
         self.aws_client = AWSClient(
             region=self.region,
             role_arn=assume_role_arn,
             external_id=external_id
         )
-        
-        # Initialize orchestrator with strands agent
-        self.orchestrator = LeadOrchestratorAgent(strands_agent)
+
+        # Always use Direct Invocation orchestrator (no feature flags)
+        logger.info(f"🚀 Initializing with DIRECT ORCHESTRATION (code-based)")
+        self.orchestrator = DirectInvocationOrchestrator(region=self.region)
+        self.orchestrator_type = "direct_invocation"
+
+        # Log initialization metadata
+        logger.info(f"Investigation ID: {self.run_id}")
+        logger.info(f"Orchestrator Type: {self.orchestrator_type}")
     
     async def investigate(self, function_name: Optional[str] = None) -> InvestigationReport:
-        """Run a PromptRCA investigation using multi-agent orchestration."""
+        """Run a PromptRCA investigation using Direct Invocation orchestration only."""
+        investigation_start = datetime.now(timezone.utc)
 
         try:
-            # Build investigation inputs in the format expected by LeadOrchestratorAgent
+            logger.info("=" * 80)
+            logger.info(f"INVESTIGATION STARTED: {self.run_id}")
+            logger.info(f"Orchestrator: {self.orchestrator_type}")
+            logger.info("=" * 80)
+
+            # Build investigation inputs in the format expected by both orchestrators
             inputs = {}
 
             # Add trace ID if available
@@ -84,15 +103,56 @@ class PromptRCAInvestigator:
 
             # Run investigation through orchestrator with role assumption
             report = await self.orchestrator.investigate(
-                inputs, 
+                inputs,
                 region=self.region,
                 assume_role_arn=self.assume_role_arn,
                 external_id=self.external_id
             )
+
+            # Add orchestrator type to report metadata
+            investigation_end = datetime.now(timezone.utc)
+            duration = (investigation_end - investigation_start).total_seconds()
+
+            logger.info("=" * 80)
+            logger.info(f"INVESTIGATION COMPLETED: {self.run_id}")
+            logger.info(f"Orchestrator: {self.orchestrator_type}")
+            logger.info(f"Duration: {duration:.2f}s")
+            logger.info(f"Facts: {len(report.facts)}, Hypotheses: {len(report.hypotheses)}")
+            logger.info(f"Root Cause Confidence: {report.root_cause_analysis.confidence_score if report.root_cause_analysis else 0:.2f}")
+            logger.info("=" * 80)
+
+            # Add orchestrator metadata to summary
+            self._add_orchestrator_metadata(report)
+
             return report
 
         except Exception as e:
+            logger.error(f"❌ Investigation failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return self.generate_error_report(str(e))
+
+    def _add_orchestrator_metadata(self, report: InvestigationReport):
+        """Add orchestrator type to report for A/B comparison metrics."""
+        try:
+            # Parse existing summary
+            if isinstance(report.summary, str):
+                if report.summary.startswith('{'):
+                    summary = json.loads(report.summary)
+                else:
+                    summary = {"summary_text": report.summary}
+            else:
+                summary = report.summary
+
+            # Add orchestrator metadata
+            summary["orchestrator_type"] = self.orchestrator_type
+            summary["investigation_id"] = self.run_id
+
+            # Update report
+            report.summary = json.dumps(summary)
+
+        except Exception as e:
+            logger.warning(f"Failed to add orchestrator metadata: {e}")
     
     def gather_facts(self, function_name: Optional[str]) -> List[Fact]:
         """Gather facts from various sources."""

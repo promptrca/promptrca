@@ -91,6 +91,44 @@ def create_bedrock_model(temperature_override: Optional[float] = None) -> Bedroc
     return BedrockModel(**config)
 
 
+def get_max_tokens(default: int = 1500) -> int:
+    """
+    Get max tokens for reasoning phases from env with sensible default.
+    """
+    try:
+        return int(os.getenv("PROMPTRCA_MAX_TOKENS", str(default)))
+    except Exception:
+        return default
+
+
+def get_temperature(agent: str | None = None, default: float = 0.2) -> float:
+    """
+    Get temperature with precedence: agent-specific -> analysis -> global -> default.
+    """
+    if agent:
+        env_key = f"PROMPTRCA_{agent.upper()}_TEMPERATURE"
+        if os.getenv(env_key) is not None:
+            return float(os.getenv(env_key))
+    if os.getenv("PROMPTRCA_ANALYSIS_TEMPERATURE") is not None:
+        return float(os.getenv("PROMPTRCA_ANALYSIS_TEMPERATURE"))
+    if os.getenv("PROMPTRCA_TEMPERATURE") is not None:
+        return float(os.getenv("PROMPTRCA_TEMPERATURE"))
+    return default
+
+
+def create_parser_model() -> BedrockModel:
+    """
+    Create a dedicated low-temp, low-token model for the fallback parser agent.
+    Enforces temperature≈0.1 and max_tokens≈256 irrespective of global defaults.
+    """
+    # Base config from global, but override specifics for parser usage
+    cfg = get_bedrock_model_config()
+    cfg["temperature"] = float(os.getenv("PROMPTRCA_PARSER_TEMPERATURE", "0.1"))
+    # Ensure a tight cap for tokens used by the parser
+    cfg["max_tokens"] = int(os.getenv("PROMPTRCA_PARSER_MAX_TOKENS", "256"))
+    return BedrockModel(**cfg)
+
+
 def create_synthesis_model() -> BedrockModel:
     """
     Create a model for synthesis with lower temperature.
@@ -320,7 +358,14 @@ def create_hypothesis_agent_model() -> BedrockModel:
                        os.getenv("PROMPTRCA_ANALYSIS_TEMPERATURE") or 
                        os.getenv("PROMPTRCA_TEMPERATURE", "0.7"))
     
-    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+    # Apply max_tokens cap if provided
+    model = BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+    max_tokens = get_max_tokens()
+    try:
+        setattr(model, "max_tokens", max_tokens)
+    except Exception:
+        pass
+    return model
 
 
 def create_root_cause_agent_model() -> BedrockModel:
@@ -339,7 +384,13 @@ def create_root_cause_agent_model() -> BedrockModel:
                        os.getenv("PROMPTRCA_ANALYSIS_TEMPERATURE") or 
                        os.getenv("PROMPTRCA_TEMPERATURE", "0.7"))
     
-    return BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+    model = BedrockModel(model_id=model_id, temperature=temperature, streaming=False)
+    max_tokens = get_max_tokens()
+    try:
+        setattr(model, "max_tokens", max_tokens)
+    except Exception:
+        pass
+    return model
 
 
 
