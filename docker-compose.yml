@@ -17,9 +17,8 @@ services:
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
-      # Direct Invocation Orchestrator (Code-based, 70% token reduction, 3-5x faster)
-      - PROMPTRCA_USE_DIRECT_ORCHESTRATION=true
-      - PROMPTRCA_DIRECT_ORCHESTRATION_PERCENTAGE=100
+      # Swarm Orchestrator (Strands best practices, autonomous agent coordination)
+      - PROMPTRCA_ORCHESTRATOR=swarm
     ports:
       - "8080:8080"
     networks:

@@ -29,8 +29,10 @@ import json
 from ..models import InvestigationReport, InvestigationTarget, Fact, Hypothesis, Advice, SeverityAssessment, RootCauseAnalysis
 from ..clients import AWSClient
 from ..core.direct_orchestrator import DirectInvocationOrchestrator
+from ..core.swarm_orchestrator import SwarmOrchestrator
 from ..utils.config import get_region
 from ..utils import get_logger
+import os
 
 logger = get_logger(__name__)
 
@@ -39,12 +41,14 @@ class PromptRCAInvestigator:
     """
     Main PromptRCA AI investigator class.
 
-    Uses only the Direct Invocation orchestrator (code-based). Legacy orchestrator removed.
+    Supports multiple orchestration patterns:
+    - Direct Invocation (code-based, default)
+    - Swarm (Strands best practices)
     """
 
     def __init__(self, region: str = None,
                  xray_trace_id: str = None, investigation_target: Dict[str, Any] = None, strands_agent=None,
-                 assume_role_arn: str = None, external_id: str = None):
+                 assume_role_arn: str = None, external_id: str = None, orchestrator_type: str = None):
         """Initialize the investigator."""
         self.region = region or get_region()
         self.run_id = str(uuid.uuid4())
@@ -54,7 +58,6 @@ class PromptRCAInvestigator:
         self.assume_role_arn = assume_role_arn
         self.external_id = external_id
 
-
         # Initialize AWS client with optional role assumption
         self.aws_client = AWSClient(
             region=self.region,
@@ -62,10 +65,16 @@ class PromptRCAInvestigator:
             external_id=external_id
         )
 
-        # Always use Direct Invocation orchestrator (no feature flags)
-        logger.info(f"🚀 Initializing with DIRECT ORCHESTRATION (code-based)")
-        self.orchestrator = DirectInvocationOrchestrator(region=self.region)
-        self.orchestrator_type = "direct_invocation"
+        # Select orchestrator type
+        self.orchestrator_type = orchestrator_type or os.getenv('PROMPTRCA_ORCHESTRATOR', 'direct')
+        
+        if self.orchestrator_type == 'swarm':
+            logger.info(f"🤖 Initializing with SWARM ORCHESTRATION (Strands best practices)")
+            self.orchestrator = SwarmOrchestrator(region=self.region)
+        else:
+            logger.info(f"🚀 Initializing with DIRECT ORCHESTRATION (code-based)")
+            self.orchestrator = DirectInvocationOrchestrator(region=self.region)
+            self.orchestrator_type = "direct_invocation"
 
         # Log initialization metadata
         logger.info(f"Investigation ID: {self.run_id}")

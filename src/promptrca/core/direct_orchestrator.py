@@ -50,6 +50,8 @@ from ..utils.config import (
     get_temperature
 )
 from ..utils import get_logger
+from .fact_collector import FactCollector
+from ..specialists import InvestigationContext
 
 logger = get_logger(__name__)
 
@@ -96,9 +98,10 @@ class DirectInvocationOrchestrator:
         """Initialize the direct invocation orchestrator."""
         self.region = region or get_region()
 
-        # Initialize input parser
+        # Initialize input parser and fact collector
         from ..agents.input_parser_agent import InputParserAgent
         self.input_parser = InputParserAgent()
+        self.fact_collector = FactCollector()
 
         logger.info("✨ DirectInvocationOrchestrator initialized (code-based orchestration)")
 
@@ -375,305 +378,21 @@ class DirectInvocationOrchestrator:
         if cloudtrail_checks_successful == 0:
             logger.info("ℹ️ CloudTrail checks not available (may not be enabled or insufficient permissions)")
 
-        async def collect_for_lambda(resource: Dict[str, Any]) -> List[Fact]:
-            from ..tools.lambda_tools import get_lambda_config, get_lambda_metrics, get_lambda_failed_invocations
-            fname = resource.get('name')
-            out: List[Fact] = []
-            try:
-                cfg = json.loads(get_lambda_config(fname))
-                if 'error' not in cfg:
-                    timeout = cfg.get('timeout')
-                    mem = cfg.get('memory_size')
-                    out.append(Fact(source='lambda_config', content=f"Lambda config loaded for {fname}", confidence=0.9, metadata={"timeout": timeout, "memory_size": mem}))
-            except Exception:
-                pass
-            try:
-                mets = json.loads(get_lambda_metrics(fname))
-                errs = len(mets.get('metrics', {}).get('Errors', []))
-                invs = len(mets.get('metrics', {}).get('Invocations', []))
-                out.append(Fact(source='lambda_metrics', content=f"Metrics available for {fname}", confidence=0.8, metadata={"errors_points": errs, "invocations_points": invs}))
-            except Exception:
-                pass
-            try:
-                fails = json.loads(get_lambda_failed_invocations(fname, hours_back=24, limit=5))
-                fail_count = fails.get('failure_count', 0)
-                if fail_count:
-                    out.append(Fact(source='lambda_logs', content=f"Found {fail_count} failed invocations", confidence=0.85, metadata={"failed_invocations": fails.get('failed_invocations', [])}))
-            except Exception:
-                pass
-            return out[:MAX_PER_RESOURCE]
-
-        async def collect_for_apigw(resource: Dict[str, Any]) -> List[Fact]:
-            from ..tools.apigateway_tools import get_api_gateway_stage_config, get_api_gateway_metrics
-            out: List[Fact] = []
-            api_id = resource.get('name')
-            stage = resource.get('metadata', {}).get('stage', 'prod')
-            try:
-                cfg = json.loads(get_api_gateway_stage_config(api_id, stage))
-                out.append(Fact(source='apigateway_config', content=f"API {api_id} stage {stage} config loaded", confidence=0.8, metadata={"xray": cfg.get('xray_tracing_enabled', False)}))
-            except Exception:
-                pass
-            try:
-                mets = json.loads(get_api_gateway_metrics(api_id, stage))
-                out.append(Fact(source='apigateway_metrics', content=f"API {api_id} metrics present", confidence=0.7, metadata={"metrics_keys": list(mets.get('metrics', {}).keys())}))
-            except Exception:
-                pass
-            
-            # Check IAM permissions for Step Functions integration
-            try:
-                # Common API Gateway execution role naming patterns
-                possible_roles = [
-                    f"{api_id}-role",
-                    "sherlock-test-test-faulty-apigateway-role",  # Actual role name from AWS
-                    "sherlock-test-test-api-gateway-role",
-                    "sherlock-test-test-apigateway-cloudwatch-role",
-                    f"sherlock-test-test-api-role", 
-                    f"apigateway-{api_id}-role",
-                    f"{api_id}-execution-role"
-                ]
-                
-                from ..tools.iam_tools import get_iam_role_config
-                
-                for role_name in possible_roles:
-                    try:
-                        logger.info(f"   → Checking IAM role: {role_name}")
-                        role_config = json.loads(get_iam_role_config(role_name))
-                        
-                        if 'error' not in role_config:
-                            # Check if role has Step Functions permissions
-                            policies = role_config.get('attached_policies', [])
-                            inline_policies = role_config.get('inline_policies', [])
-                            
-                            has_stepfunctions_permission = False
-                            missing_permissions = []
-                            
-                            # Check for states:StartSyncExecution permission
-                            for policy in policies + inline_policies:
-                                policy_doc = policy.get('policy_document', {})
-                                statements = policy_doc.get('Statement', [])
-                                for stmt in statements:
-                                    if stmt.get('Effect') == 'Allow':
-                                        actions = stmt.get('Action', [])
-                                        if isinstance(actions, str):
-                                            actions = [actions]
-                                        if any('states:StartSyncExecution' in action or 'states:*' in action for action in actions):
-                                            has_stepfunctions_permission = True
-                                            break
-                            
-                            if has_stepfunctions_permission:
-                                out.append(Fact(
-                                    source='iam_analysis',
-                                    content=f"API Gateway role {role_name} has Step Functions StartSyncExecution permission",
-                                    confidence=0.9,
-                                    metadata={'role': role_name, 'permission': 'states:StartSyncExecution', 'status': 'granted'}
-                                ))
-                            else:
-                                out.append(Fact(
-                                    source='iam_analysis',
-                                    content=f"API Gateway role {role_name} lacks Step Functions StartSyncExecution permission",
-                                    confidence=0.95,
-                                    metadata={'role': role_name, 'permission': 'states:StartSyncExecution', 'status': 'missing'}
-                                ))
-                            break  # Found the role, stop checking others
-                        
-                    except Exception as e:
-                        logger.debug(f"Could not check role {role_name}: {e}")
-                        continue
-                        
-            except Exception as e:
-                logger.debug(f"IAM permission check failed for API {api_id}: {e}")
-            
-            # Check API Gateway execution logs for permission errors
-            try:
-                from ..tools.cloudwatch_tools import query_logs_by_trace_id
-                
-                # Look for trace IDs in the parsed inputs to check execution logs
-                for trace_id in parsed_inputs.trace_ids:
-                    try:
-                        logger.info(f"   → Checking API Gateway execution logs for trace {trace_id}")
-                        log_group = f"API-Gateway-Execution-Logs_{api_id}/{stage}"
-                        
-                        logs_result = json.loads(query_logs_by_trace_id(log_group, trace_id, hours_back=1))
-                        
-                        if 'error' not in logs_result:
-                            log_entries = logs_result.get('log_entries', [])
-                            
-                            for entry in log_entries:
-                                message = entry.get('message', '')
-                                
-                                # Look for permission errors in log messages
-                                if 'AccessDeniedException' in message or 'not authorized' in message:
-                                    out.append(Fact(
-                                        source='apigateway_logs',
-                                        content=f"API Gateway execution log shows permission error: {message[:200]}...",
-                                        confidence=0.95,
-                                        metadata={'trace_id': trace_id, 'log_group': log_group, 'error_type': 'permission'}
-                                    ))
-                                elif 'states:StartSyncExecution' in message:
-                                    out.append(Fact(
-                                        source='apigateway_logs',
-                                        content=f"API Gateway attempted Step Functions StartSyncExecution call",
-                                        confidence=0.9,
-                                        metadata={'trace_id': trace_id, 'log_group': log_group, 'action': 'StartSyncExecution'}
-                                    ))
-                                elif 'HTTP 502' in message or 'Internal server error' in message:
-                                    out.append(Fact(
-                                        source='apigateway_logs',
-                                        content=f"API Gateway execution log shows internal error: {message[:200]}...",
-                                        confidence=0.9,
-                                        metadata={'trace_id': trace_id, 'log_group': log_group, 'error_type': 'internal'}
-                                    ))
-                        
-                    except Exception as e:
-                        logger.debug(f"Could not check execution logs for trace {trace_id}: {e}")
-                        
-            except Exception as e:
-                logger.debug(f"API Gateway execution log check failed: {e}")
-            
-            return out[:MAX_PER_RESOURCE]
-
-        async def collect_for_stepfunctions(resource: Dict[str, Any]) -> List[Fact]:
-            from ..tools.stepfunctions_tools import get_stepfunctions_execution_details, get_stepfunctions_metrics
-            out: List[Fact] = []
-            
-            # Handle execution ARN - need to reconstruct from parsed components
-            resource_name = resource.get('name', '')
-            resource_id = resource.get('resource_id', '')
-            execution_arn = resource.get('execution_arn')
-            
-            # Try to get the full ARN from metadata or reconstruct it
-            if execution_arn:
-                target_arn = execution_arn
-            elif resource_id and 'arn:aws:states:' in resource_id:
-                # The resource_id might contain the partial ARN
-                target_arn = resource_id
-            else:
-                # For now, let's use the known ARN from the test case
-                # TODO: Fix input parsing to preserve full execution ARNs
-                target_arn = "arn:aws:states:eu-west-1:840181656986:execution:sherlock-test-test-faulty-state-machine:bc6d80ba-c8cb-48a0-9474-fd66186ca74c"
-                
-                # Remove the confusing debug message
-            
-            try:
-                logger.info(f"   → Analyzing Step Functions execution: {target_arn}")
-                exec_details = json.loads(get_stepfunctions_execution_details(target_arn))
-                
-                if 'error' not in exec_details:
-                    status = exec_details.get('status', 'UNKNOWN')
-                    out.append(Fact(
-                        source='stepfunctions_execution',
-                        content=f"Step Functions execution status: {status}",
-                        confidence=0.9,
-                        metadata={'execution_arn': target_arn, 'status': status}
-                    ))
-                    
-                    # Check for execution errors
-                    if status == 'FAILED':
-                        error_msg = exec_details.get('error', 'Unknown error')
-                        cause = exec_details.get('cause', 'Unknown cause')
-                        
-                        out.append(Fact(
-                            source='stepfunctions_execution',
-                            content=f"Step Functions execution failed: {error_msg}",
-                            confidence=0.95,
-                            metadata={'execution_arn': target_arn, 'error': error_msg, 'cause': cause}
-                        ))
-                        
-                        # Check for specific permission errors
-                        if 'AccessDeniedException' in error_msg or 'not authorized' in error_msg:
-                            out.append(Fact(
-                                source='stepfunctions_execution',
-                                content=f"Step Functions execution failed due to permission error: {error_msg}",
-                                confidence=0.95,
-                                metadata={'execution_arn': target_arn, 'error_type': 'permission', 'error': error_msg}
-                            ))
-                        elif 'lambda:InvokeFunction' in error_msg:
-                            out.append(Fact(
-                                source='stepfunctions_execution',
-                                content=f"Step Functions cannot invoke Lambda function due to missing permission",
-                                confidence=0.95,
-                                metadata={'execution_arn': target_arn, 'error_type': 'lambda_permission', 'missing_permission': 'lambda:InvokeFunction'}
-                            ))
-                    
-                    # Get execution history for more details
-                    history_events = exec_details.get('history_events', [])
-                    for event in history_events:
-                        event_type = event.get('type', '')
-                        if 'Failed' in event_type:
-                            event_details = event.get('executionFailedEventDetails', {}) or event.get('taskFailedEventDetails', {})
-                            if event_details:
-                                error_msg = event_details.get('error', '')
-                                cause = event_details.get('cause', '')
-                                
-                                out.append(Fact(
-                                    source='stepfunctions_execution',
-                                    content=f"Step Functions state failed: {event_type} - {error_msg}",
-                                    confidence=0.9,
-                                    metadata={'execution_arn': target_arn, 'event_type': event_type, 'error': error_msg, 'cause': cause}
-                                ))
-                else:
-                    error_msg = exec_details.get('error', 'Unknown error')
-                    
-                    # Check for specific permission errors in the error message
-                    if 'not authorized' in error_msg and 'lambda:InvokeFunction' in error_msg:
-                        out.append(Fact(
-                            source='stepfunctions_execution',
-                            content=f"Step Functions execution failed: State machine role lacks lambda:InvokeFunction permission",
-                            confidence=0.95,
-                            metadata={'execution_arn': target_arn, 'error_type': 'lambda_permission', 'missing_permission': 'lambda:InvokeFunction'}
-                        ))
-                    elif 'AccessDeniedException' in error_msg:
-                        out.append(Fact(
-                            source='stepfunctions_execution',
-                            content=f"Step Functions execution failed due to access denied: {error_msg}",
-                            confidence=0.9,
-                            metadata={'execution_arn': target_arn, 'error_type': 'permission', 'error': error_msg}
-                        ))
-                    else:
-                        out.append(Fact(
-                            source='stepfunctions_execution',
-                            content=f"Could not analyze Step Functions execution: {error_msg}",
-                            confidence=0.8,
-                            metadata={'execution_arn': target_arn, 'error': error_msg}
-                        ))
-                    
-            except Exception as e:
-                logger.debug(f"Step Functions execution analysis failed: {e}")
-                out.append(Fact(
-                    source='stepfunctions_execution',
-                    content=f"Step Functions analysis failed: {str(e)}",
-                    confidence=0.7,
-                    metadata={'execution_arn': target_arn, 'error': str(e)}
-                ))
-            
-            return out[:MAX_PER_RESOURCE]
-
-        # Build tasks per resource type
-        tasks = []
-        loop = asyncio.get_event_loop()
-        for r in resources:
-            rtype = (r.get('type') or '').lower()
-            if rtype == 'lambda':
-                tasks.append(collect_for_lambda(r))
-            elif rtype == 'apigateway':
-                tasks.append(collect_for_apigw(r))
-            elif rtype == 'stepfunctions':
-                tasks.append(collect_for_stepfunctions(r))
-
-        if tasks:
-            groups = await asyncio.gather(*tasks, return_exceptions=True)
-            for group in groups:
-                if isinstance(group, list):
-                    facts.extend(group[:MAX_PER_RESOURCE])
-
-        # Deep trace analysis
-        for trace_id in parsed_inputs.trace_ids:
-            logger.info(f"   → Analyzing trace {trace_id} deeply...")
-            trace_facts = await self._analyze_xray_trace_deep(trace_id)
-            facts.extend(trace_facts)
+        # Use FactCollector to coordinate specialist execution
+        context = InvestigationContext(
+            trace_ids=parsed_inputs.trace_ids,
+            region=self.region,
+            parsed_inputs=parsed_inputs
+        )
+        
+        logger.info(f"📊 Step 3: Collecting facts from {len(resources)} resources...")
+        specialist_facts = await self.fact_collector.collect_facts(resources, context)
+        facts.extend(specialist_facts)
 
         # Cap globally
         return facts[:MAX_GLOBAL]
+
+    # Old specialist functions removed - now using FactCollector with dedicated specialist classes
 
     async def _analyze_xray_trace_deep(self, trace_id: str) -> List[Fact]:
         """Deep X-Ray trace analysis - extract ALL meaningful information."""

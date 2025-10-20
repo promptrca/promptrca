@@ -21,5 +21,7 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from .investigator import PromptRCAInvestigator
+from .swarm_orchestrator import SwarmOrchestrator
+from .direct_orchestrator import DirectInvocationOrchestrator
 
-__all__ = ["PromptRCAInvestigator"]
+__all__ = ["PromptRCAInvestigator", "SwarmOrchestrator", "DirectInvocationOrchestrator"]
