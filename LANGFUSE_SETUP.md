@@ -1,40 +1,58 @@
-# Langfuse Integration for PromptRCA
+# OpenTelemetry Observability for PromptRCA
 
-This document explains the Langfuse observability integration for PromptRCA investigations.
+This document explains the OpenTelemetry observability integration for PromptRCA investigations, supporting multiple backends including Langfuse, AWS X-Ray, and other OTLP-compatible systems.
 
 ## What's Been Implemented
 
-### 1. Langfuse Dashboard (Self-Hosted)
+### 1. Generic OpenTelemetry Setup
+- **Backend-agnostic**: Supports Langfuse, AWS X-Ray, and any OTLP-compatible backend
+- **Automatic detection**: Backend type is detected based on endpoint URL and credentials
+- **Strands SDK integration**: Configured for comprehensive tracing
+- **OTLP exporter**: Sends traces to your chosen backend
+
+### 2. Supported Backends
+
+#### Langfuse (Self-Hosted or Cloud)
 - **PostgreSQL database** for storing traces
 - **ClickHouse database** for analytics and metrics (required for v3+)
 - **Redis** for caching
 - **Langfuse server** with web UI
 - Dashboard available at: `http://localhost:3000`
 
-### 2. OpenTelemetry Tracing
-- Strands SDK integration configured
-- OTLP exporter sends traces to Langfuse
-- Automatic capture of:
-  - Agent lifecycle and execution flow
-  - LLM calls with prompts and responses
-  - Tool executions and results
-  - Token usage per agent invocation
-  - Performance metrics and timing
+#### AWS X-Ray
+- **Native AWS integration** via OTLP
+- **AWS credentials** automatically used for authentication
+- **X-Ray console** for trace visualization
+- **Service map** and performance insights
 
-### 3. Trace Attributes
+#### Generic OTLP Backends
+- **Jaeger**, **Zipkin**, **New Relic**, **Datadog**, etc.
+- **Custom headers** support for authentication
+- **Flexible configuration** via environment variables
+
+### 3. Automatic Trace Capture
+- Agent lifecycle and execution flow
+- LLM calls with prompts and responses
+- Tool executions and results
+- Token usage per agent invocation
+- Performance metrics and timing
+
+### 4. Trace Attributes
 Enhanced traces include metadata for filtering and analysis:
 - **Service identification**: service.name, agent.type
 - **AWS context**: aws.service, agent.region
 - **Investigation context**: Captured through agent prompts
 
-### 4. Cost Tracking Maintained
+### 5. Cost Tracking Maintained
 - Existing TokenTracker still active for cost calculations
 - Per-investigation cost breakdowns in API responses
-- Langfuse provides additional observability
+- OpenTelemetry provides additional observability
 
 ## Quick Start
 
-### 1. Start the Stack
+### Option 1: Langfuse Setup
+
+#### 1. Start the Langfuse Stack
 
 ```bash
 # Copy environment variables
@@ -51,13 +69,67 @@ docker-compose up -d
 docker-compose ps
 ```
 
-### 2. Access Langfuse Dashboard
+#### 2. Access Langfuse Dashboard
 
 1. Open browser to `http://localhost:3000`
 2. Create an account (first-time setup)
 3. Navigate to "Traces" section
 
-### 3. Run an Investigation
+### Option 2: AWS X-Ray Setup
+
+#### 1. Configure AWS Credentials
+
+```bash
+# Option A: AWS CLI
+aws configure
+
+# Option B: Environment variables
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+export AWS_REGION=eu-west-1
+
+# Option C: IAM Role (if running on EC2/Lambda)
+# No additional configuration needed
+```
+
+#### 2. Update Environment Configuration
+
+```bash
+# Copy environment variables
+cp env.example .env
+
+# Edit .env and configure for X-Ray
+OTEL_EXPORTER_OTLP_ENDPOINT=https://xray.amazonaws.com/v1/traces
+OTEL_SERVICE_NAME=promptrca-server
+AWS_REGION=eu-west-1
+
+# Comment out Langfuse configuration
+# LANGFUSE_PUBLIC_KEY=...
+# LANGFUSE_SECRET_KEY=...
+```
+
+#### 3. Start PromptRCA
+
+```bash
+# Start only the PromptRCA service (no Langfuse stack needed)
+docker-compose up promptrca-server
+```
+
+### Option 3: Generic OTLP Backend
+
+#### 1. Configure Your Backend
+
+```bash
+# Copy environment variables
+cp env.example .env
+
+# Edit .env for your OTLP backend
+OTEL_EXPORTER_OTLP_ENDPOINT=http://your-backend:4317/v1/traces
+OTEL_SERVICE_NAME=promptrca-server
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer your-token
+```
+
+### 4. Run an Investigation
 
 ```bash
 # Example investigation
@@ -68,15 +140,26 @@ curl -X POST http://localhost:8080/invocations \
   }'
 ```
 
-### 4. View Traces in Langfuse
+### 5. View Traces
 
+#### Langfuse
 1. Go to Langfuse dashboard (`http://localhost:3000`)
 2. Click on "Traces" in the sidebar
-3. You should see traces for:
-   - Lead orchestrator execution
-   - Specialized agent calls (Lambda, IAM, etc.)
-   - Tool executions (get_lambda_config, get_cloudwatch_logs, etc.)
-   - LLM invocations with token counts
+
+#### AWS X-Ray
+1. Go to AWS X-Ray console
+2. Navigate to "Traces" section
+3. Filter by service name: `promptrca-server`
+
+#### Generic Backend
+1. Access your backend's web UI
+2. Look for traces with service name: `promptrca-server`
+
+You should see traces for:
+- Lead orchestrator execution
+- Specialized agent calls (Lambda, IAM, etc.)
+- Tool executions (get_lambda_config, get_cloudwatch_logs, etc.)
+- LLM invocations with token counts
 
 ## Trace Structure
 
@@ -110,17 +193,23 @@ Use trace attributes to filter investigations:
 
 ### Required for Tracing
 ```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://langfuse:3000/ingest
+OTEL_EXPORTER_OTLP_ENDPOINT=<your-backend-endpoint>
 OTEL_SERVICE_NAME=promptrca-server  # or promptrca-lambda
 ```
 
-### Optional for Development
-```bash
-OTEL_CONSOLE_EXPORT=true  # Also print traces to console
-```
+### Backend-Specific Configuration
 
-### Langfuse Configuration
+#### Langfuse
 ```bash
+# Langfuse OTLP endpoint
+OTEL_EXPORTER_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel
+# OR for self-hosted: http://langfuse:3000/api/public/otel
+
+# Langfuse credentials (auto-generates Basic Auth)
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+
+# Langfuse self-hosted stack (if using docker-compose)
 LANGFUSE_DB_NAME=langfuse
 LANGFUSE_DB_USER=langfuse
 LANGFUSE_DB_PASSWORD=langfuse
@@ -129,6 +218,33 @@ LANGFUSE_CLICKHOUSE_USER=langfuse
 LANGFUSE_CLICKHOUSE_PASSWORD=langfuse
 LANGFUSE_NEXTAUTH_SECRET=your-secret-key-change-in-production
 LANGFUSE_ENCRYPTION_KEY=your-encryption-key-change-in-production
+```
+
+#### AWS X-Ray
+```bash
+# X-Ray OTLP endpoint
+OTEL_EXPORTER_OTLP_ENDPOINT=https://xray.amazonaws.com/v1/traces
+
+# AWS credentials (choose one method)
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=eu-west-1
+# OR use AWS CLI: aws configure
+# OR use IAM roles (if running on EC2/Lambda)
+```
+
+#### Generic OTLP Backend
+```bash
+# Your OTLP backend endpoint
+OTEL_EXPORTER_OTLP_ENDPOINT=http://your-backend:4317/v1/traces
+
+# Custom headers (optional)
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer your-token,Other-Header=value
+```
+
+### Optional for Development
+```bash
+OTEL_CONSOLE_EXPORT=true  # Also print traces to console
 ```
 
 ## Troubleshooting

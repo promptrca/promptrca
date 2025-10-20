@@ -391,8 +391,12 @@ def setup_strands_telemetry() -> None:
     """
     Set up Strands OpenTelemetry tracing for observability.
     
-    Configures OTLP exporter to send traces to Langfuse and enables
-    Strands tracing for all agent interactions.
+    Configures OTLP exporter to send traces to various backends:
+    - Langfuse (with Basic Auth)
+    - AWS X-Ray (via OTLP)
+    - Any other OTLP-compatible backend
+    
+    The backend is determined by the OTEL_EXPORTER_OTLP_ENDPOINT URL and available credentials.
     """
     try:
         from strands.telemetry import StrandsTelemetry
@@ -400,46 +404,98 @@ def setup_strands_telemetry() -> None:
         # Get configuration from environment
         otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
         service_name = os.getenv("OTEL_SERVICE_NAME", "promptrca")
-        public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-        secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+        
+        # Backend-specific credentials
+        langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+        langfuse_secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+        
+        # Generic OTLP headers (for any backend that needs custom headers)
+        otlp_headers = os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
 
         if not otlp_endpoint:
             print("⚠️  OTEL_EXPORTER_OTLP_ENDPOINT not set, skipping telemetry setup")
             return
 
-        if not public_key or not secret_key:
-            print("⚠️  Langfuse credentials not set, skipping telemetry setup")
-            return
-
-        # Generate Basic Auth header from Langfuse API keys
-        import base64
-        credentials = f"{public_key}:{secret_key}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
-
-        # Set OTEL environment variables for the exporter
-        os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {encoded_credentials}"
-
         # Initialize Strands telemetry
         strands_telemetry = StrandsTelemetry()
 
-        # Set up OTLP exporter with endpoint and auth headers
-        headers = {"Authorization": f"Basic {encoded_credentials}"}
-        strands_telemetry.setup_otlp_exporter(
-            endpoint=otlp_endpoint,
-            headers=headers
-        )
+        # Determine backend type and configure accordingly
+        backend_type = _detect_backend_type(otlp_endpoint, langfuse_public_key, langfuse_secret_key)
+        
+        if backend_type == "langfuse":
+            # Langfuse requires Basic Auth
+            import base64
+            credentials = f"{langfuse_public_key}:{langfuse_secret_key}"
+            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+            
+            headers = {"Authorization": f"Basic {encoded_credentials}"}
+            os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {encoded_credentials}"
+            
+            strands_telemetry.setup_otlp_exporter(
+                endpoint=otlp_endpoint,
+                headers=headers
+            )
+            print(f"✅ Strands telemetry configured for Langfuse: {service_name} -> {otlp_endpoint}")
+            
+        elif backend_type == "xray":
+            # X-Ray via OTLP (no special auth required, uses AWS credentials)
+            strands_telemetry.setup_otlp_exporter(endpoint=otlp_endpoint)
+            print(f"✅ Strands telemetry configured for AWS X-Ray: {service_name} -> {otlp_endpoint}")
+            
+        elif backend_type == "generic":
+            # Generic OTLP backend - use any provided headers
+            headers = {}
+            if otlp_headers:
+                # Parse headers from environment variable (format: "key1=value1,key2=value2")
+                for header_pair in otlp_headers.split(','):
+                    if '=' in header_pair:
+                        key, value = header_pair.split('=', 1)
+                        headers[key.strip()] = value.strip()
+            
+            strands_telemetry.setup_otlp_exporter(
+                endpoint=otlp_endpoint,
+                headers=headers if headers else None
+            )
+            print(f"✅ Strands telemetry configured for OTLP backend: {service_name} -> {otlp_endpoint}")
         
         # Set up console exporter for development (optional)
         if os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true":
             strands_telemetry.setup_console_exporter()
         
-        print(f"✅ Strands telemetry configured: {service_name} -> {otlp_endpoint}")
-        print(f"🔑 Generated Basic Auth header for Langfuse")
-        
     except ImportError as e:
         print(f"⚠️  Strands telemetry not available: {e}")
     except Exception as e:
         print(f"⚠️  Failed to setup telemetry: {e}")
+
+
+def _detect_backend_type(otlp_endpoint: str, langfuse_public_key: str, langfuse_secret_key: str) -> str:
+    """
+    Detect the backend type based on endpoint URL and available credentials.
+    
+    Args:
+        otlp_endpoint: The OTLP endpoint URL
+        langfuse_public_key: Langfuse public key (if available)
+        langfuse_secret_key: Langfuse secret key (if available)
+        
+    Returns:
+        str: Backend type ('langfuse', 'xray', or 'generic')
+    """
+    if not otlp_endpoint:
+        return "generic"
+    
+    endpoint_lower = otlp_endpoint.lower()
+    
+    # Check for Langfuse-specific endpoints and credentials
+    if (langfuse_public_key and langfuse_secret_key and 
+        any(domain in endpoint_lower for domain in ['langfuse', 'cloud.langfuse.com'])):
+        return "langfuse"
+    
+    # Check for X-Ray specific endpoints
+    if any(domain in endpoint_lower for domain in ['xray', 'amazonaws.com/xray']):
+        return "xray"
+    
+    # Default to generic OTLP backend
+    return "generic"
 
 
 def get_telemetry_config() -> Dict[str, Any]:
@@ -450,13 +506,26 @@ def get_telemetry_config() -> Dict[str, Any]:
     - OTEL_EXPORTER_OTLP_ENDPOINT: OTLP endpoint URL (default: None)
     - OTEL_SERVICE_NAME: Service name for traces (default: promptrca)
     - OTEL_CONSOLE_EXPORT: Enable console export for development (default: false)
+    - OTEL_EXPORTER_OTLP_HEADERS: Custom headers for OTLP exporter (optional)
+    - LANGFUSE_PUBLIC_KEY: Langfuse public key (optional)
+    - LANGFUSE_SECRET_KEY: Langfuse secret key (optional)
     
     Returns:
         Dict[str, Any]: Telemetry configuration dictionary
     """
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    
+    # Detect backend type
+    backend_type = _detect_backend_type(otlp_endpoint, langfuse_public_key, langfuse_secret_key)
+    
     return {
-        "otlp_endpoint": os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+        "otlp_endpoint": otlp_endpoint,
         "service_name": os.getenv("OTEL_SERVICE_NAME", "promptrca"),
         "console_export": os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true",
-        "enabled": bool(os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        "enabled": bool(otlp_endpoint),
+        "backend_type": backend_type,
+        "langfuse_configured": bool(langfuse_public_key and langfuse_secret_key),
+        "custom_headers": os.getenv("OTEL_EXPORTER_OTLP_HEADERS")
     }
