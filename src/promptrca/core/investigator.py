@@ -28,7 +28,6 @@ import json
 
 from ..models import InvestigationReport, InvestigationTarget, Fact, Hypothesis, Advice, SeverityAssessment, RootCauseAnalysis
 from ..clients import AWSClient
-from ..core.direct_orchestrator import DirectInvocationOrchestrator
 from ..core.swarm_orchestrator import SwarmOrchestrator
 from ..utils.config import get_region
 from ..utils import get_logger
@@ -65,16 +64,10 @@ class PromptRCAInvestigator:
             external_id=external_id
         )
 
-        # Select orchestrator type
-        self.orchestrator_type = orchestrator_type or os.getenv('PROMPTRCA_ORCHESTRATOR', 'direct')
-        
-        if self.orchestrator_type == 'swarm':
-            logger.info(f"🤖 Initializing with SWARM ORCHESTRATION (Strands best practices)")
-            self.orchestrator = SwarmOrchestrator(region=self.region)
-        else:
-            logger.info(f"🚀 Initializing with DIRECT ORCHESTRATION (code-based)")
-            self.orchestrator = DirectInvocationOrchestrator(region=self.region)
-            self.orchestrator_type = "direct_invocation"
+        # Force Swarm orchestrator only
+        self.orchestrator_type = "swarm"
+        logger.info(f"🤖 Initializing with SWARM ORCHESTRATION (Strands best practices)")
+        self.orchestrator = SwarmOrchestrator(region=self.region)
 
         # Log initialization metadata
         logger.info(f"Investigation ID: {self.run_id}")

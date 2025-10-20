@@ -19,6 +19,11 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_HOST}
       # Swarm Orchestrator (Strands best practices, autonomous agent coordination)
       - PROMPTRCA_ORCHESTRATOR=swarm
+      # Swarm Performance Configuration
+      - SWARM_MAX_HANDOFFS=${SWARM_MAX_HANDOFFS:-5}
+      - SWARM_MAX_ITERATIONS=${SWARM_MAX_ITERATIONS:-3}
+      - SWARM_EXECUTION_TIMEOUT=${SWARM_EXECUTION_TIMEOUT:-90.0}
+      - SWARM_NODE_TIMEOUT=${SWARM_NODE_TIMEOUT:-30.0}
     ports:
       - "8080:8080"
     networks:

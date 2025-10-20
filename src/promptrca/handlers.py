@@ -93,12 +93,17 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         investigation_target = payload.get("investigation_target", {})
 
         # Initialize investigator
+        orchestrator_env = os.getenv('PROMPTRCA_ORCHESTRATOR', 'direct')
+        print(f"🔧 DEBUG: Environment PROMPTRCA_ORCHESTRATOR: {orchestrator_env}")
+        
         investigator = PromptRCAInvestigator(
             region=region,
             xray_trace_id=xray_trace_id,
             investigation_target=investigation_target,
             strands_agent=orchestrator_model
         )
+        
+        print(f"🎯 DEBUG: Investigator created with orchestrator: {investigator.orchestrator_type}")
 
         # Run investigation (async)
         report = asyncio.run(investigator.investigate(function_name=function_name))
@@ -128,19 +133,19 @@ def _handle_free_text_investigation(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle free text investigation using direct invocation orchestration."""
+    """Handle free text investigation using Swarm orchestration."""
     try:
-        from .core.direct_orchestrator import DirectInvocationOrchestrator
+        from .core.swarm_orchestrator import SwarmOrchestrator
 
-        # Initialize direct invocation orchestrator (code-based, not AI-based)
-        orchestrator = DirectInvocationOrchestrator(region=region)
+        # Initialize Swarm orchestrator
+        orchestrator = SwarmOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "free_text_input": free_text
         }
 
-        # Run direct invocation investigation (async)
+        # Run Swarm investigation (async)
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
@@ -167,19 +172,19 @@ def _handle_investigation_inputs(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle investigation_inputs using direct invocation orchestration."""
+    """Handle investigation_inputs using Swarm orchestration."""
     try:
-        from .core.direct_orchestrator import DirectInvocationOrchestrator
+        from .core.swarm_orchestrator import SwarmOrchestrator
 
-        # Initialize direct invocation orchestrator (code-based, not AI-based)
-        orchestrator = DirectInvocationOrchestrator(region=region)
+        # Initialize Swarm orchestrator
+        orchestrator = SwarmOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "investigation_inputs": investigation_inputs
         }
 
-        # Run direct invocation investigation (async)
+        # Run Swarm investigation (async)
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response

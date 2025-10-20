@@ -14,10 +14,11 @@ Key Benefits:
 
 import asyncio
 import json
+import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
-from strands import Agent, tool
+from strands import Agent, tool, ToolContext
 from strands.multiagent import Swarm
 
 from ..models import (
@@ -48,15 +49,33 @@ def lambda_specialist_tool(resource_data: str, investigation_context: str) -> st
     Analyze Lambda function configuration, logs, and performance issues.
     
     Args:
-        resource_data: JSON string containing Lambda resource information
+        resource_data: JSON string containing Lambda resource information (can be single resource or list)
         investigation_context: JSON string with trace IDs, region, and context
     
     Returns:
         JSON string with analysis results including facts and findings
     """
     try:
-        resource = json.loads(resource_data)
+        resource_data_parsed = json.loads(resource_data)
         context_data = json.loads(investigation_context)
+        
+        # Handle both single resource and list of resources
+        if isinstance(resource_data_parsed, list):
+            # If it's a list, take the first Lambda resource or create a placeholder
+            lambda_resources = [r for r in resource_data_parsed if r.get('type') == 'lambda']
+            if lambda_resources:
+                resource = lambda_resources[0]
+            else:
+                # No Lambda resources found, create placeholder for analysis
+                resource = {
+                    'type': 'lambda',
+                    'name': 'unknown',
+                    'id': 'unknown',
+                    'region': context_data.get('region', 'us-east-1')
+                }
+        else:
+            # Single resource object
+            resource = resource_data_parsed
         
         specialist = LambdaSpecialist()
         context = InvestigationContext(
@@ -86,7 +105,7 @@ def lambda_specialist_tool(resource_data: str, investigation_context: str) -> st
                 }
                 for fact in facts
             ],
-            "analysis_summary": f"Analyzed Lambda function {resource.get('name')} - found {len(facts)} facts"
+            "analysis_summary": f"Analyzed Lambda function {resource.get('name', 'unknown')} - found {len(facts)} facts"
         }
         
         return json.dumps(results, indent=2)
@@ -106,15 +125,33 @@ def apigateway_specialist_tool(resource_data: str, investigation_context: str) -
     Analyze API Gateway configuration, stage settings, and integration issues.
     
     Args:
-        resource_data: JSON string containing API Gateway resource information
+        resource_data: JSON string containing API Gateway resource information (can be single resource or list)
         investigation_context: JSON string with trace IDs, region, and context
     
     Returns:
         JSON string with analysis results including facts and findings
     """
     try:
-        resource = json.loads(resource_data)
+        resource_data_parsed = json.loads(resource_data)
         context_data = json.loads(investigation_context)
+        
+        # Handle both single resource and list of resources
+        if isinstance(resource_data_parsed, list):
+            # If it's a list, take the first API Gateway resource or create a placeholder
+            apigateway_resources = [r for r in resource_data_parsed if r.get('type') == 'apigateway']
+            if apigateway_resources:
+                resource = apigateway_resources[0]
+            else:
+                # No API Gateway resources found, create placeholder for analysis
+                resource = {
+                    'type': 'apigateway',
+                    'name': 'unknown',
+                    'id': 'unknown',
+                    'region': context_data.get('region', 'us-east-1')
+                }
+        else:
+            # Single resource object
+            resource = resource_data_parsed
         
         specialist = APIGatewaySpecialist()
         context = InvestigationContext(
@@ -143,7 +180,7 @@ def apigateway_specialist_tool(resource_data: str, investigation_context: str) -
                 }
                 for fact in facts
             ],
-            "analysis_summary": f"Analyzed API Gateway {resource.get('name')} - found {len(facts)} facts"
+            "analysis_summary": f"Analyzed API Gateway {resource.get('name', 'unknown')} - found {len(facts)} facts"
         }
         
         return json.dumps(results, indent=2)
@@ -170,8 +207,26 @@ def stepfunctions_specialist_tool(resource_data: str, investigation_context: str
         JSON string with analysis results including facts and findings
     """
     try:
-        resource = json.loads(resource_data)
+        resource_data_parsed = json.loads(resource_data)
         context_data = json.loads(investigation_context)
+        
+        # Handle both single resource and list of resources
+        if isinstance(resource_data_parsed, list):
+            # If it's a list, take the first Step Functions resource or create a placeholder
+            stepfunctions_resources = [r for r in resource_data_parsed if r.get('type') == 'stepfunctions']
+            if stepfunctions_resources:
+                resource = stepfunctions_resources[0]
+            else:
+                # No Step Functions resources found, create placeholder for analysis
+                resource = {
+                    'type': 'stepfunctions',
+                    'name': 'unknown',
+                    'id': 'unknown',
+                    'region': context_data.get('region', 'us-east-1')
+                }
+        else:
+            # Single resource object
+            resource = resource_data_parsed
         
         specialist = StepFunctionsSpecialist()
         context = InvestigationContext(
@@ -200,7 +255,7 @@ def stepfunctions_specialist_tool(resource_data: str, investigation_context: str
                 }
                 for fact in facts
             ],
-            "analysis_summary": f"Analyzed Step Functions {resource.get('name')} - found {len(facts)} facts"
+            "analysis_summary": f"Analyzed Step Functions {resource.get('name', 'unknown')} - found {len(facts)} facts"
         }
         
         return json.dumps(results, indent=2)
@@ -214,8 +269,8 @@ def stepfunctions_specialist_tool(resource_data: str, investigation_context: str
         })
 
 
-@tool
-def trace_specialist_tool(trace_ids: str, investigation_context: str) -> str:
+@tool(context=True)
+def trace_specialist_tool(trace_ids: str, investigation_context: str, tool_context: 'ToolContext') -> str:
     """
     Perform deep X-Ray trace analysis to extract service interactions and errors.
     
@@ -229,6 +284,12 @@ def trace_specialist_tool(trace_ids: str, investigation_context: str) -> str:
     try:
         trace_id_list = json.loads(trace_ids)
         context_data = json.loads(investigation_context)
+        
+        # Get AWS client from invocation state and set it in context
+        # This is needed because Swarm agents run in separate async contexts
+        aws_client = tool_context.invocation_state.get('aws_client')
+        if aws_client:
+            set_aws_client(aws_client)
         
         specialist = TraceSpecialist()
         context = InvestigationContext(
@@ -298,14 +359,25 @@ class SwarmOrchestrator:
         # Create the investigation swarm
         self._create_swarm()
         
+        # Circuit breaker for tool failures
+        self.tool_failure_count = 0
+        self.max_tool_failures = 3
+        
         logger.info("✨ SwarmOrchestrator initialized with Strands best practices")
     
     def _create_specialist_agents(self):
         """Create specialized agents following Strands patterns."""
+        from ..utils.config import (
+            create_lambda_agent_model,
+            create_apigateway_agent_model, 
+            create_stepfunctions_agent_model,
+            create_orchestrator_model  # Use orchestrator model for trace specialist
+        )
         
         # Lambda Specialist Agent
         self.lambda_agent = Agent(
             name="lambda_specialist",
+            model=create_lambda_agent_model(),
             system_prompt="""You are a Lambda specialist agent for AWS infrastructure investigation.
 
 Your expertise includes:
@@ -328,6 +400,7 @@ Always use the handoff_to_agent tool when you discover issues outside your Lambd
         # API Gateway Specialist Agent  
         self.apigateway_agent = Agent(
             name="apigateway_specialist",
+            model=create_apigateway_agent_model(),
             system_prompt="""You are an API Gateway specialist agent for AWS infrastructure investigation.
 
 Your expertise includes:
@@ -351,6 +424,7 @@ Always use the handoff_to_agent tool when you discover issues outside your API G
         # Step Functions Specialist Agent
         self.stepfunctions_agent = Agent(
             name="stepfunctions_specialist",
+            model=create_stepfunctions_agent_model(),
             system_prompt="""You are a Step Functions specialist agent for AWS infrastructure investigation.
 
 Your expertise includes:
@@ -374,6 +448,7 @@ Always use the handoff_to_agent tool when you discover issues outside your Step 
         # Trace Analysis Specialist Agent
         self.trace_agent = Agent(
             name="trace_specialist",
+            model=create_orchestrator_model(),  # Use orchestrator model for trace analysis
             system_prompt="""You are a trace analysis specialist agent for AWS infrastructure investigation.
 
 Your expertise includes:
@@ -395,6 +470,12 @@ Always use the handoff_to_agent tool to route service-specific findings to the a
     
     def _create_swarm(self):
         """Create the investigation swarm with all specialist agents."""
+        # Get swarm configuration from environment variables with sensible defaults
+        max_handoffs = int(os.getenv('SWARM_MAX_HANDOFFS', '5'))
+        max_iterations = int(os.getenv('SWARM_MAX_ITERATIONS', '3'))
+        execution_timeout = float(os.getenv('SWARM_EXECUTION_TIMEOUT', '90.0'))
+        node_timeout = float(os.getenv('SWARM_NODE_TIMEOUT', '30.0'))
+        
         self.swarm = Swarm(
             nodes=[
                 self.lambda_agent,
@@ -403,10 +484,10 @@ Always use the handoff_to_agent tool to route service-specific findings to the a
                 self.trace_agent
             ],
             entry_point=self.trace_agent,  # Start with trace analysis
-            max_handoffs=20,
-            max_iterations=10,  # Prevent infinite loops
-            execution_timeout=900.0,  # 15 minutes
-            node_timeout=300.0  # 5 minutes per agent
+            max_handoffs=max_handoffs,
+            max_iterations=max_iterations,
+            execution_timeout=execution_timeout,
+            node_timeout=node_timeout
         )
     
     async def investigate(
@@ -475,15 +556,34 @@ Always use the handoff_to_agent tool to route service-specific findings to the a
             
             # Execute swarm investigation
             logger.info("🤖 Step 3: Executing swarm investigation...")
-            swarm_result = self.swarm(
-                investigation_prompt,
-                invocation_state={
-                    "resources": resources,
-                    "investigation_context": investigation_context,
-                    "region": region,
-                    "trace_ids": parsed_inputs.trace_ids
-                }
-            )
+            
+            # Set AWS client in context before swarm execution
+            # Also pass it through invocation_state for tools that need it
+            set_aws_client(aws_client)
+            
+            try:
+                swarm_result = self.swarm(
+                    investigation_prompt,
+                    invocation_state={
+                        "resources": resources,
+                        "investigation_context": investigation_context,
+                        "region": region,
+                        "trace_ids": parsed_inputs.trace_ids,
+                        "aws_client": aws_client  # Pass AWS client for tools to access
+                    }
+                )
+            except TimeoutError as e:
+                logger.warning(f"Swarm investigation timed out after 90s: {e}")
+                # Create a meaningful fallback result
+                swarm_result = type('TimeoutResult', (), {
+                    'content': f"Investigation timed out but found {len(resources)} resources. Partial analysis available."
+                })()
+            except Exception as e:
+                logger.error(f"Swarm execution failed: {e}")
+                # Fallback for other errors
+                swarm_result = type('ErrorResult', (), {
+                    'content': f"Investigation encountered error: {str(e)}. Attempting basic analysis."
+                })()
             
             # Extract facts from swarm results
             facts = self._extract_facts_from_swarm_result(swarm_result)

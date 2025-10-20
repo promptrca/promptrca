@@ -32,13 +32,16 @@ if TYPE_CHECKING:
 # This is async-safe and thread-safe, ensuring proper isolation between concurrent investigations
 _aws_client_context: ContextVar[Optional['AWSClient']] = ContextVar('aws_client', default=None)
 
+# Fallback module-level storage for Swarm contexts where contextvars don't propagate
+_aws_client_fallback: Optional['AWSClient'] = None
+
 
 def set_aws_client(client: 'AWSClient') -> None:
     """
     Set the AWS client for the current request context.
     
     This should be called at the beginning of each investigation to establish
-    the AWS credentials that all tools will use. The client is stored in a
+    the AWS credentials that all tools will use. The client is stored in b
     context variable that is isolated per async task or thread.
     
     Args:
