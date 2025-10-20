@@ -102,8 +102,11 @@ def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24) -> str:
         JSON string with bucket metrics
     """
     from datetime import datetime, timedelta
-    
+
     try:
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
         client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
@@ -155,15 +158,15 @@ def get_s3_bucket_metrics(bucket_name: str, hours_back: int = 24) -> str:
 
 
 @tool
-def list_s3_bucket_objects(list: str) -> str:
+def list_s3_bucket_objects(bucket_name: str, prefix: str = "", max_keys: int = 100) -> str:
     """
     List S3 bucket objects (for debugging purposes).
-    
+
     Args:
         bucket_name: The S3 bucket name
         prefix: Object key prefix to filter by
         max_keys: Maximum number of objects to return (default: 100)
-    
+
     Returns:
         JSON string with object list
     """
@@ -172,12 +175,12 @@ def list_s3_bucket_objects(list: str) -> str:
         aws_client = get_aws_client()
         region = aws_client.region
         client = aws_client.get_client('s3')
-        
+
         kwargs = {
             'Bucket': bucket_name,
             'MaxKeys': max_keys
         }
-        
+
         if prefix:
             kwargs['Prefix'] = prefix
         

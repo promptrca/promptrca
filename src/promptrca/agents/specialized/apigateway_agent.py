@@ -28,6 +28,12 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
+from ...tools.apigateway_tools import (
+    get_api_gateway_deployment_history,
+    get_apigateway_logs,
+    get_api_gateway_access_logs_parsed,
+    get_api_gateway_metrics
+)
 
 
 def create_apigateway_agent(model) -> Agent:
@@ -125,7 +131,15 @@ CRITICAL REQUIREMENTS:
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_api_gateway_stage_config, get_iam_role_config, get_cloudwatch_logs],
+        tools=[
+            get_api_gateway_stage_config,
+            get_api_gateway_deployment_history,
+            get_apigateway_logs,
+            get_api_gateway_access_logs_parsed,
+            get_api_gateway_metrics,
+            get_iam_role_config,
+            get_cloudwatch_logs
+        ],
         trace_attributes={
             "service.name": "promptrca-apigateway-agent",
             "service.version": "1.0.0",
@@ -157,10 +171,18 @@ def create_apigateway_agent_tool(apigateway_agent: Agent):
         try:
             # Create investigation prompt
             prompt = f"""Investigate API Gateway: {api_id} (stage: {stage_name})
-            
+
 Context: {investigation_context}
 
-Please analyze this API Gateway for any issues, errors, or problems. Start by getting the stage configuration, then check IAM permissions if integration issues are suspected, and examine logs for errors."""
+Investigation steps:
+1. Get stage configuration to understand integrations and settings
+2. Check deployment history to correlate with incident timeline
+3. Review access logs for HTTP errors and patterns
+4. Examine execution logs for integration failures
+5. Check metrics for error rates and latency
+6. Verify IAM permissions if integration issues suspected
+
+Focus on temporal correlation - if there was a recent deployment, compare timing with issue start."""
 
             # Run the agent
             agent_result = apigateway_agent(prompt)

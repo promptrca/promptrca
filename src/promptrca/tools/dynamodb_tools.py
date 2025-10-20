@@ -155,8 +155,11 @@ def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24) -> str:
     Note: Metrics are aggregated in 1-hour periods for the specified time range.
     """
     from datetime import datetime, timedelta
-    
+
     try:
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
         client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()

@@ -196,6 +196,63 @@ JSON: [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence":
         for fact in facts:
             content_lower = fact.content.lower()
 
+            # Permission issues (HIGH PRIORITY)
+            if ("accessdenied" in content_lower or "access denied" in content_lower or
+                "unauthorized" in content_lower or "forbidden" in content_lower or
+                "403" in content_lower) and "permission_issue" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="permission_issue",
+                    description="Access denied error indicates missing IAM permissions or insufficient role permissions",
+                    confidence=0.90,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("permission_issue")
+
+            # Integration failures (502/504 errors)
+            if ("502" in content_lower or "bad gateway" in content_lower or
+                "504" in content_lower or "gateway timeout" in content_lower or
+                "integration failure" in content_lower) and "integration_failure" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="integration_failure",
+                    description="502/504 error indicates backend integration failure or timeout",
+                    confidence=0.85,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("integration_failure")
+
+            # Configuration errors
+            if ("invalid parameter" in content_lower or "validation exception" in content_lower or
+                "configuration error" in content_lower or "misconfigured" in content_lower) and "configuration_error" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="configuration_error",
+                    description="Invalid parameter or validation error indicates configuration mismatch",
+                    confidence=0.88,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("configuration_error")
+
+            # Resource not found errors
+            if ("resource not found" in content_lower or "404" in content_lower or
+                "does not exist" in content_lower or "notfound" in content_lower) and "resource_not_found" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="configuration_error",
+                    description="Resource not found indicates missing or misconfigured resource",
+                    confidence=0.87,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("resource_not_found")
+
+            # Throttling issues
+            if ("throttl" in content_lower or "rate exceeded" in content_lower or
+                "429" in content_lower or "too many requests" in content_lower) and "throttling" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="throttling",
+                    description="Throttling or rate limiting indicates capacity constraints or excessive requests",
+                    confidence=0.90,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("throttling")
+
             # Timeout issues
             if "timeout" in content_lower and "timeout" not in identified_issues:
                 hypotheses.append(Hypothesis(
@@ -253,6 +310,45 @@ JSON: [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence":
                     evidence=[fact.content]
                 ))
                 identified_issues.add("error_handling")
+
+            # Additional code bug patterns
+            if ("keyerror" in content_lower or "key error" in content_lower) and "key_error" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="code_bug",
+                    description="KeyError indicates code is accessing dictionary key that doesn't exist",
+                    confidence=0.92,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("key_error")
+
+            if ("attributeerror" in content_lower or "attribute error" in content_lower) and "attribute_error" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="code_bug",
+                    description="AttributeError indicates code is accessing object attribute or method that doesn't exist",
+                    confidence=0.92,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("attribute_error")
+
+            if ("typeerror" in content_lower or "type error" in content_lower) and "type_error" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="code_bug",
+                    description="TypeError indicates incompatible data types in operation",
+                    confidence=0.90,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("type_error")
+
+            # Network/connectivity issues
+            if ("connection refused" in content_lower or "network error" in content_lower or
+                "unable to connect" in content_lower or "connection timeout" in content_lower) and "network_issue" not in identified_issues:
+                hypotheses.append(Hypothesis(
+                    type="infrastructure_issue",
+                    description="Network connectivity issue indicates VPC configuration, security group, or network routing problem",
+                    confidence=0.82,
+                    evidence=[fact.content]
+                ))
+                identified_issues.add("network_issue")
 
         logger.info(f"✅ Generated {len(hypotheses)} heuristic hypotheses")
         return hypotheses
