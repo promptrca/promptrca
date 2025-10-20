@@ -27,6 +27,10 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
+from ...tools.stepfunctions_tools import (
+    get_stepfunctions_execution_details,
+    list_recent_stepfunctions_executions
+)
 
 
 def create_stepfunctions_agent(model) -> Agent:
@@ -121,7 +125,13 @@ CRITICAL REQUIREMENTS:
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_stepfunctions_definition, get_iam_role_config, get_cloudwatch_logs],
+        tools=[
+            get_stepfunctions_definition,
+            get_stepfunctions_execution_details,
+            list_recent_stepfunctions_executions,
+            get_iam_role_config,
+            get_cloudwatch_logs
+        ],
         trace_attributes={
             "service.name": "promptrca-stepfunctions-agent",
             "service.version": "1.0.0",
@@ -136,14 +146,44 @@ def create_stepfunctions_agent_tool(stepfunctions_agent: Agent):
     from strands import tool
 
     @tool
-    def investigate_stepfunctions(state_machine_arn: str, investigation_context: str = "") -> str:
+    def investigate_stepfunctions(state_machine_arn: str = "", execution_arn: str = "", investigation_context: str = "") -> str:
+        """
+        Investigate Step Functions state machine or specific execution for failures and issues.
+
+        Args:
+            state_machine_arn: State machine ARN (for general investigation)
+            execution_arn: Execution ARN (for specific execution failure investigation)
+            investigation_context: Additional context about the investigation
+
+        Returns:
+            JSON string with investigation results
+        """
         import json
         try:
-            prompt = f"""Investigate Step Functions state machine: {state_machine_arn}
+            # Build investigation prompt based on what's provided
+            if execution_arn:
+                prompt = f"""Investigate failed Step Functions execution: {execution_arn}
 
 Context: {investigation_context}
 
-Please analyze this Step Functions state machine for any issues, errors, or problems. Start by getting the state machine definition, then check IAM permissions if execution issues are suspected, and examine logs for errors."""
+Investigation steps:
+1. Get execution details to see which state failed and error details
+2. List recent executions to see if this is a pattern
+3. Get state machine definition to understand workflow
+4. Check IAM permissions if States.Permissions error
+5. Examine logs for additional context"""
+            else:
+                prompt = f"""Investigate Step Functions state machine: {state_machine_arn}
+
+Context: {investigation_context}
+
+Investigation steps:
+1. List recent failed executions to identify patterns
+2. Get execution details for failed executions
+3. Get state machine definition to review configuration
+4. Check IAM permissions if execution issues suspected
+5. Examine logs for errors"""
+
             agent_result = stepfunctions_agent(prompt)
             response = str(agent_result.content) if hasattr(agent_result, 'content') else str(agent_result)
 
@@ -171,8 +211,16 @@ Please analyze this Step Functions state machine for any issues, errors, or prob
 
             summary = data.get("summary") or (response[:500] + "..." if len(str(response)) > 500 else str(response))
 
+            # Build target info based on what was investigated
+            target_info = {"type": "step_functions"}
+            if execution_arn:
+                target_info["execution_arn"] = execution_arn
+                target_info["state_machine_arn"] = state_machine_arn
+            else:
+                target_info["state_machine_arn"] = state_machine_arn
+
             return json.dumps({
-                "target": {"type": "step_functions", "state_machine_arn": state_machine_arn},
+                "target": target_info,
                 "context": investigation_context,
                 "status": "completed",
                 "facts": data.get("facts") or [],
@@ -182,8 +230,16 @@ Please analyze this Step Functions state machine for any issues, errors, or prob
                 "summary": summary
             })
         except Exception as e:
+            # Build target info for error case too
+            target_info = {"type": "step_functions"}
+            if execution_arn:
+                target_info["execution_arn"] = execution_arn
+                target_info["state_machine_arn"] = state_machine_arn
+            else:
+                target_info["state_machine_arn"] = state_machine_arn
+
             return json.dumps({
-                "target": {"type": "step_functions", "state_machine_arn": state_machine_arn},
+                "target": target_info,
                 "context": investigation_context,
                 "status": "failed",
                 "error": str(e)

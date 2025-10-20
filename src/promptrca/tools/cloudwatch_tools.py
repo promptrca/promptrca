@@ -21,30 +21,31 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_cloudwatch_logs(log_group: str, hours_back: int = 1) -> str:
     """
     Get CloudWatch logs for a log group.
     
     Args:
         log_group: The CloudWatch log group name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with log events
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         start_time = int((datetime.now() - timedelta(hours=hours_back)).timestamp() * 1000)
         end_time = int(datetime.now().timestamp() * 1000)
@@ -86,25 +87,26 @@ def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None)
 
 
 @tool
-def query_logs_by_trace_id(query: str, region: str = None) -> str:
-    region = region or get_region()
+def query_logs_by_trace_id(query: str) -> str:
     """
     Query CloudWatch Logs Insights for ALL logs related to a specific X-Ray trace ID.
     This is THE KEY tool for trace-driven investigation - it correlates logs with traces.
 
     Args:
         trace_id: The X-Ray trace ID to search for (e.g., "1-68e915e7-7a2c7c6d1427db5e5b97c431")
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with all logs matching the trace ID across all log groups
     """
-    import boto3
+    
     import time
     from datetime import datetime, timedelta
-
+    
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
 
         # CloudWatch Insights query to find logs with this trace ID
         query = f'''
@@ -200,8 +202,7 @@ def query_logs_by_trace_id(query: str, region: str = None) -> str:
 
 
 @tool
-def get_cloudwatch_metrics(metric_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_cloudwatch_metrics(metric_name: str, hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for a specific namespace and metric.
     
@@ -210,16 +211,18 @@ def get_cloudwatch_metrics(metric_name: str, hours_back: int = 24, region: str =
         metric_name: The metric name (e.g., "Invocations", "Errors")
         dimensions: List of dimension dictionaries (e.g., [{"Name": "FunctionName", "Value": "my-function"}])
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with metric data
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -256,22 +259,22 @@ def get_cloudwatch_metrics(metric_name: str, hours_back: int = 24, region: str =
 
 
 @tool
-def get_cloudwatch_alarms(alarm_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_cloudwatch_alarms(alarm_name: str) -> str:
     """
     Get CloudWatch alarms and their status.
     
     Args:
         alarm_names: Optional list of alarm names to filter by
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with alarm information
     """
-    import boto3
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         if alarm_names:
             response = client.describe_alarms(AlarmNames=alarm_names)
@@ -306,21 +309,20 @@ def get_cloudwatch_alarms(alarm_name: str, region: str = None) -> str:
 
 
 @tool
-def list_cloudwatch_dashboards(list: str, region: str = None) -> str:
-    region = region or get_region()
+def list_cloudwatch_dashboards(list: str) -> str:
     """
     List CloudWatch dashboards.
     
     Args:
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with dashboard information
     """
-    import boto3
-    
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         response = client.list_dashboards()
         dashboards = response.get('DashboardEntries', [])

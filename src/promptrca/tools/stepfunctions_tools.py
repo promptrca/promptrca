@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_definition(state_machine_arn: str) -> str:
     """
     Get Step Functions state machine definition.
     
     Args:
         state_machine_arn: The state machine ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with state machine definition
     """
-    import boto3
-    
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
         response = client.describe_state_machine(stateMachineArn=state_machine_arn)
         
         config = {
@@ -62,24 +61,24 @@ def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> 
 
 
 @tool
-def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1) -> str:
     """
-    Get CloudWatch logs for a Step Functions state machine.
+    Get Step Functions execution logs for debugging and analysis.
     
     Args:
-        state_machine_arn: The Step Functions state machine ARN
-        hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
+        state_machine_arn: The state machine ARN
+        hours_back: Number of hours to look back for logs (default: 1)
     
     Returns:
-        JSON string with Step Functions log events
+        JSON string with execution logs
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        client = aws_client.get_client('logs')
         
         # Extract state machine name from ARN
         state_machine_name = state_machine_arn.split(':')[-1]
@@ -129,23 +128,76 @@ def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: 
 
 
 @tool
-def get_stepfunctions_execution_details(execution_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_execution_details(execution_arn: str) -> str:
     """
-    Get detailed Step Functions execution information including status, input, output, and history.
-    Use this when you have a Step Functions execution ARN to investigate what happened.
+    Retrieve comprehensive Step Functions execution details for failure analysis and debugging.
+
+    This tool fetches complete execution information including which state failed, error messages,
+    input/output data, and the full execution timeline. Essential for investigating Step Functions
+    execution failures, state transition errors, and workflow issues.
+
+    Use this tool when:
+    - Investigating a specific failed Step Functions execution
+    - Need to identify which state in the workflow failed
+    - Want to see the exact error message and cause
+    - Need to understand the execution timeline and state transitions
+    - Analyzing input/output data that caused failures
+    - Debugging state machine logic errors
 
     Args:
-        execution_arn: The Step Functions execution ARN
-        region: AWS region (default: from environment)
+        execution_arn: The Step Functions execution ARN (e.g., "arn:aws:states:us-east-1:123456789012:execution:MyStateMachine:execution-name")
 
     Returns:
-        JSON string with execution details including history events
-    """
-    import boto3
+        JSON string containing:
+        - execution_arn: The execution ARN
+        - state_machine_arn: Parent state machine ARN
+        - status: Execution status (RUNNING, SUCCEEDED, FAILED, TIMED_OUT, ABORTED)
+        - start_date: When execution started
+        - stop_date: When execution ended (if completed)
+        - input: Input JSON passed to execution
+        - output: Output JSON (if successful)
+        - error: Error code if failed (e.g., "States.TaskFailed", "States.Timeout")
+        - cause: Detailed error cause/message
+        - trace_header: X-Ray trace header for correlation
+        - history_events: Array of execution history events showing:
+          - State transitions (which states executed in order)
+          - Failed states with error details
+          - Task inputs and outputs
+          - Retry attempts
+          - Time spent in each state
 
+    Common Error Patterns:
+        - States.TaskFailed: Lambda function or integrated service returned error
+        - States.Timeout: State execution exceeded timeout setting
+        - States.Permissions: IAM role lacks permissions for state's task
+        - States.Runtime: Invalid state machine definition or runtime error
+        - States.DataLimitExceeded: Input/output data exceeds size limits
+
+    Investigation Workflow:
+        1. Check execution status to confirm failure
+        2. Review error and cause for immediate issue
+        3. Examine history_events to find failed state
+        4. Look at failed state's input to understand what triggered error
+        5. Check if error is consistent (use list_recent_executions to see pattern)
+        6. Verify IAM permissions if States.Permissions error
+        7. Check integrated service (Lambda, DynamoDB, etc.) if States.TaskFailed
+
+    Example Use Cases:
+        - Failed execution: See which state failed and why
+        - Timeout issues: Find which state timed out and typical duration
+        - Permission errors: Identify which AWS service call was denied
+        - Data issues: Review input that caused validation errors
+        - Logic errors: Trace state transitions to find incorrect flow
+        - Integration failures: See which Lambda/API call failed
+
+    Note: History events are limited to most recent 20 for performance. For full history, check CloudWatch Logs.
+    """
+    
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
 
         # Get execution details
         exec_response = client.describe_execution(executionArn=execution_arn)
@@ -186,24 +238,25 @@ def get_stepfunctions_execution_details(execution_arn: str, region: str = None) 
 
 
 @tool
-def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24) -> str:
     """
-    Get CloudWatch metrics for a Step Functions state machine.
+    Get Step Functions metrics and performance data.
     
     Args:
-        state_machine_arn: The Step Functions state machine ARN
-        hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
+        state_machine_arn: The state machine ARN
+        hours_back: Number of hours to look back for metrics (default: 24)
     
     Returns:
-        JSON string with Step Functions metrics
+        JSON string with metrics data
     """
-    import boto3
+    
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -247,7 +300,114 @@ def get_stepfunctions_metrics(state_machine_arn: str, hours_back: int = 24, regi
             },
             "metrics": metrics
         }
-        
+
         return json.dumps(config, indent=2)
     except Exception as e:
         return json.dumps({"error": str(e), "state_machine_arn": state_machine_arn})
+
+
+@tool
+def list_recent_stepfunctions_executions(state_machine_arn: str, status_filter: str = "FAILED", limit: int = 10) -> str:
+    """
+    List recent Step Functions executions to identify failure patterns and trends.
+
+    This tool retrieves recent executions for a state machine, filtered by status, to help identify
+    recurring failures, pattern analysis, and historical context. Essential for understanding if
+    a failure is isolated or part of a larger pattern.
+
+    Use this tool when:
+    - Investigating if a failure is a one-time issue or recurring pattern
+    - Looking for similar past failures to understand root cause
+    - Analyzing failure frequency and trends over time
+    - Finding other failed executions with same error pattern
+    - Checking if all executions are failing or only some
+    - Correlating failures with deployments or changes
+
+    Args:
+        state_machine_arn: The state machine ARN (e.g., "arn:aws:states:us-east-1:123456789012:stateMachine:MyStateMachine")
+        status_filter: Filter by execution status - "RUNNING", "SUCCEEDED", "FAILED", "TIMED_OUT", "ABORTED" (default: "FAILED")
+        limit: Maximum number of executions to return (default: 10, max: 100)
+
+    Returns:
+        JSON string containing:
+        - state_machine_arn: The state machine ARN
+        - status_filter: The status filter applied
+        - execution_count: Number of executions found
+        - executions: Array of execution summaries with:
+          - execution_arn: ARN of the execution
+          - name: Execution name
+          - status: Execution status
+          - start_date: When execution started
+          - stop_date: When execution ended (if completed)
+
+    Investigation Patterns:
+        - All recent executions failing: Likely state machine configuration issue or IAM problem
+        - Intermittent failures: May be input-dependent or downstream service issue
+        - Failures started at specific time: Correlate with deployments/changes
+        - Same error across executions: Systematic issue (config, permissions, logic)
+        - Different errors: Input-dependent or environmental issues
+
+    Common Patterns Found:
+        - 100% failure rate: State machine definition error or IAM issue
+        - 50% failure rate: Input validation or conditional logic issue
+        - Increasing failure rate: Downstream service degradation
+        - Failures after deployment: New code or configuration issue
+        - Timeout pattern: Performance degradation or resource constraints
+
+    Investigation Workflow:
+        1. List recent FAILED executions to see failure frequency
+        2. Compare with SUCCEEDED executions to see success rate
+        3. Check if failures started at specific time (deployment correlation)
+        4. Use execution ARNs to get details of failed executions
+        5. Look for common error patterns across failures
+        6. Cross-reference with recent state machine or IAM changes
+
+    Example Use Cases:
+        - Pattern detection: "Are all executions failing or just some?"
+        - Timeline analysis: "When did failures start?"
+        - Success rate calculation: Compare FAILED vs SUCCEEDED counts
+        - Error correlation: Get multiple failed execution ARNs for detailed analysis
+        - Deployment impact: Check if failures started after recent deployment
+
+    Note: Results are sorted by start time (most recent first). Use execution ARN from results
+    with get_stepfunctions_execution_details for detailed failure analysis.
+    """
+    try:
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
+
+        # List executions with filter
+        response = client.list_executions(
+            stateMachineArn=state_machine_arn,
+            statusFilter=status_filter,
+            maxResults=min(limit, 100)  # AWS API max is 1000, we limit to 100 for performance
+        )
+
+        executions = response.get('executions', [])
+
+        config = {
+            "state_machine_arn": state_machine_arn,
+            "status_filter": status_filter,
+            "execution_count": len(executions),
+            "executions": [
+                {
+                    "execution_arn": exec.get('executionArn'),
+                    "name": exec.get('name'),
+                    "status": exec.get('status'),
+                    "start_date": str(exec.get('startDate')),
+                    "stop_date": str(exec.get('stopDate')) if exec.get('stopDate') else None
+                }
+                for exec in executions
+            ]
+        }
+
+        return json.dumps(config, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "state_machine_arn": state_machine_arn,
+            "status_filter": status_filter
+        })

@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_vpc_config(vpc_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_vpc_config(vpc_id: str) -> str:
     """
     Get VPC configuration and details.
     
     Args:
         vpc_id: The VPC ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with VPC configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_vpcs(VpcIds=[vpc_id])
         vpc = response['Vpcs'][0]
@@ -65,22 +64,21 @@ def get_vpc_config(vpc_id: str, region: str = None) -> str:
 
 
 @tool
-def get_subnet_config(subnet_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_subnet_config(subnet_id: str) -> str:
     """
     Get subnet configuration and details.
     
     Args:
         subnet_id: The subnet ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with subnet configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_subnets(SubnetIds=[subnet_id])
         subnet = response['Subnets'][0]
@@ -108,22 +106,21 @@ def get_subnet_config(subnet_id: str, region: str = None) -> str:
 
 
 @tool
-def get_security_group_config(security_group_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_security_group_config(security_group_id: str) -> str:
     """
     Get security group configuration and rules.
     
     Args:
         security_group_id: The security group ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with security group configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_security_groups(GroupIds=[security_group_id])
         sg = response['SecurityGroups'][0]
@@ -145,22 +142,21 @@ def get_security_group_config(security_group_id: str, region: str = None) -> str
 
 
 @tool
-def get_network_interface_config(network_interface_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_network_interface_config(network_interface_id: str) -> str:
     """
     Get network interface (ENI) configuration.
     
     Args:
         network_interface_id: The network interface ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with network interface configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_network_interfaces(NetworkInterfaceIds=[network_interface_id])
         eni = response['NetworkInterfaces'][0]
@@ -194,22 +190,21 @@ def get_network_interface_config(network_interface_id: str, region: str = None) 
 
 
 @tool
-def get_nat_gateway_config(nat_gateway_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_nat_gateway_config(nat_gateway_id: str) -> str:
     """
     Get NAT Gateway configuration.
     
     Args:
         nat_gateway_id: The NAT Gateway ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with NAT Gateway configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_nat_gateways(NatGatewayIds=[nat_gateway_id])
         nat_gw = response['NatGateways'][0]
@@ -231,22 +226,21 @@ def get_nat_gateway_config(nat_gateway_id: str, region: str = None) -> str:
 
 
 @tool
-def get_internet_gateway_config(igw_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_internet_gateway_config(igw_id: str) -> str:
     """
     Get Internet Gateway configuration.
     
     Args:
         igw_id: The Internet Gateway ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Internet Gateway configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('ec2', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('ec2')
         
         response = client.describe_internet_gateways(InternetGatewayIds=[igw_id])
         igw = response['InternetGateways'][0]

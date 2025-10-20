@@ -36,17 +36,24 @@ class PromptRCAInvestigator:
     """Main PromptRCA AI investigator class."""
     
     def __init__(self, region: str = None, 
-                 xray_trace_id: str = None, investigation_target: Dict[str, Any] = None, strands_agent=None):
+                 xray_trace_id: str = None, investigation_target: Dict[str, Any] = None, strands_agent=None,
+                 assume_role_arn: str = None, external_id: str = None):
         """Initialize the investigator."""
         self.region = region or get_region()
         self.run_id = str(uuid.uuid4())
         self.start_time = datetime.now(timezone.utc)
         self.xray_trace_id = xray_trace_id
         self.investigation_target = InvestigationTarget(**investigation_target) if investigation_target else None
+        self.assume_role_arn = assume_role_arn
+        self.external_id = external_id
         
         
-        # Initialize AWS client (always use real AWS)
-        self.aws_client = AWSClient(region=self.region)
+        # Initialize AWS client with optional role assumption
+        self.aws_client = AWSClient(
+            region=self.region,
+            role_arn=assume_role_arn,
+            external_id=external_id
+        )
         
         # Initialize orchestrator with strands agent
         self.orchestrator = LeadOrchestratorAgent(strands_agent)
@@ -75,8 +82,13 @@ class PromptRCAInvestigator:
                     "metadata": self.investigation_target.to_dict()
                 }
 
-            # Run investigation through orchestrator
-            report = await self.orchestrator.investigate(inputs, region=self.region)
+            # Run investigation through orchestrator with role assumption
+            report = await self.orchestrator.investigate(
+                inputs, 
+                region=self.region,
+                assume_role_arn=self.assume_role_arn,
+                external_id=self.external_id
+            )
             return report
 
         except Exception as e:

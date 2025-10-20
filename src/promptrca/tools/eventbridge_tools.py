@@ -21,28 +21,27 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_eventbridge_rule_config(rule_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_eventbridge_rule_config(rule_name: str) -> str:
     """
     Get EventBridge rule configuration.
     
     Args:
         rule_name: The EventBridge rule name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('events', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('events')
         
         response = client.describe_rule(Name=rule_name)
         rule = response
@@ -66,22 +65,21 @@ def get_eventbridge_rule_config(rule_name: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_targets(rule_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_eventbridge_targets(rule_name: str) -> str:
     """
     Get EventBridge rule targets.
     
     Args:
         rule_name: The EventBridge rule name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with target details
     """
-    import boto3
-    
     try:
-        client = boto3.client('events', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('events')
         
         response = client.list_targets_by_rule(Rule=rule_name)
         targets = response.get('Targets', [])
@@ -118,24 +116,21 @@ def get_eventbridge_targets(rule_name: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_metrics(rule_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_eventbridge_metrics(rule_name: str, hours_back: int = 24) -> str:
     """
     Get CloudWatch metrics for an EventBridge rule.
     
     Args:
         rule_name: The EventBridge rule name
         hours_back: Number of hours to look back (default: 24)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule metrics
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -182,21 +177,20 @@ def get_eventbridge_metrics(rule_name: str, hours_back: int = 24, region: str = 
 
 
 @tool
-def list_eventbridge_rules(list: str, region: str = None) -> str:
-    region = region or get_region()
+def list_eventbridge_rules(list: str) -> str:
     """
     List EventBridge rules in the region.
     
     Args:
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with rule list
     """
-    import boto3
-    
     try:
-        client = boto3.client('events', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('events')
         
         response = client.list_rules()
         rules = response.get('Rules', [])
@@ -223,22 +217,21 @@ def list_eventbridge_rules(list: str, region: str = None) -> str:
 
 
 @tool
-def get_eventbridge_bus_config(event_bus_name: str = "default", region: str = None) -> str:
-    region = region or get_region()
+def get_eventbridge_bus_config(event_bus_name: str = "default") -> str:
     """
     Get EventBridge event bus configuration.
     
     Args:
         event_bus_name: The EventBridge event bus name (default: "default")
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with event bus configuration
     """
-    import boto3
-    
     try:
-        client = boto3.client('events', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('events')
         
         response = client.describe_event_bus(Name=event_bus_name)
         

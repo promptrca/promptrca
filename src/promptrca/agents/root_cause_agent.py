@@ -222,16 +222,69 @@ JSON: {{"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "an
         return json.loads(json_str)
 
     def _classify_hypotheses_fallback(self, hypotheses: List[Hypothesis]) -> Dict[str, Any]:
-        """Fallback classification based on confidence scores."""
+        """Fallback classification with symptom vs root cause detection."""
         logger.info("📊 Using fallback root cause classification")
 
-        # Simple heuristic: highest confidence is primary, rest are contributing
-        primary_root_cause = hypotheses[0] if hypotheses else None
-        contributing_factors = hypotheses[1:3] if len(hypotheses) > 1 else []
+        # Define symptom types (these are effects, not causes)
+        SYMPTOM_TYPES = {"timeout", "error_rate", "throttling", "high_latency", "resource_constraint"}
 
-        summary = f"Based on confidence scores, identified {primary_root_cause.type if primary_root_cause else 'unknown'} as primary root cause"
-        if contributing_factors:
-            summary += f" with {len(contributing_factors)} contributing factors"
+        # Define root cause types (these are actual causes)
+        ROOT_CAUSE_TYPES = {"permission_issue", "configuration_error", "code_bug",
+                            "infrastructure_issue", "integration_failure", "network_issue"}
+
+        # Separate hypotheses into root causes and symptoms
+        root_causes = [h for h in hypotheses if h.type in ROOT_CAUSE_TYPES]
+        symptoms = [h for h in hypotheses if h.type in SYMPTOM_TYPES]
+        unknown = [h for h in hypotheses if h.type not in ROOT_CAUSE_TYPES and h.type not in SYMPTOM_TYPES]
+
+        # Select primary root cause
+        primary_root_cause = None
+        contributing_factors = []
+
+        if root_causes:
+            # Pick highest confidence root cause
+            primary_root_cause = max(root_causes, key=lambda h: h.confidence)
+
+            # Contributing factors: other root causes + top symptoms
+            other_root_causes = [h for h in root_causes if h != primary_root_cause]
+            contributing_factors = other_root_causes[:2] + symptoms[:1]
+
+            summary = (f"Identified {primary_root_cause.type} as primary root cause "
+                      f"(confidence: {primary_root_cause.confidence:.2f})")
+            if symptoms:
+                symptom_types = ", ".join([s.type for s in symptoms[:3]])
+                summary += f". Observed symptoms: {symptom_types}"
+
+        elif symptoms:
+            # Only symptoms available - pick highest confidence but reduce confidence
+            primary_root_cause = max(symptoms, key=lambda h: h.confidence)
+            original_confidence = primary_root_cause.confidence
+
+            # Reduce confidence by 30% since we only have symptoms, not root causes
+            # Create a new Hypothesis object with adjusted confidence
+            from ..models import Hypothesis as HypothesisModel
+            primary_root_cause = HypothesisModel(
+                type=primary_root_cause.type,
+                description=primary_root_cause.description + " (symptom - root cause unclear)",
+                confidence=primary_root_cause.confidence * 0.7,
+                evidence=primary_root_cause.evidence
+            )
+
+            contributing_factors = [s for s in symptoms if s != primary_root_cause][:2]
+            summary = (f"Only symptoms identified, no clear root cause. "
+                      f"Primary symptom: {primary_root_cause.type} "
+                      f"(adjusted confidence: {primary_root_cause.confidence:.2f}, "
+                      f"original: {original_confidence:.2f})")
+
+        elif unknown:
+            # Unknown hypothesis types
+            primary_root_cause = max(unknown, key=lambda h: h.confidence)
+            contributing_factors = [h for h in unknown if h != primary_root_cause][:2]
+            summary = f"Identified {primary_root_cause.type} as potential root cause (type classification unclear)"
+
+        else:
+            # No hypotheses at all
+            summary = "No hypotheses available for root cause analysis"
 
         return {
             "primary_root_cause": primary_root_cause,

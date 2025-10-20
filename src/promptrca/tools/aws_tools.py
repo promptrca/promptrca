@@ -21,29 +21,28 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = None) -> str:
+def get_api_gateway_stage_config(api_id: str, stage_name: str) -> str:
     """
     Get API Gateway stage configuration including integration details (Lambda, Step Functions, etc.).
 
     Args:
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
-        region: AWS region (default: from environment)
 
     Returns:
         JSON string with stage configuration and integration details
     """
-    region = region or get_region()
-    import boto3
-
     try:
-        client = boto3.client('apigateway', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('apigateway')
 
         # Get stage config
         stage_response = client.get_stage(
@@ -114,23 +113,23 @@ def get_api_gateway_stage_config(api_id: str, stage_name: str, region: str = Non
 
 
 @tool
-def get_iam_role_config(role_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_iam_role_config(role_name: str) -> str:
     """
     Get IAM role configuration including trust policy and attached policies.
     
     Args:
         role_name: The IAM role name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with role configuration
     """
-    import boto3
     from urllib.parse import unquote
     
     try:
-        client = boto3.client('iam', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('iam')
         
         # Get role details
         role_response = client.get_role(RoleName=role_name)
@@ -173,22 +172,22 @@ def get_iam_role_config(role_name: str, region: str = None) -> str:
 
 
 @tool
-def get_lambda_config(function_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_config(function_name: str) -> str:
     """
     Get Lambda function configuration including environment variables and IAM role.
     
     Args:
         function_name: The Lambda function name
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda configuration
     """
-    import boto3
     
     try:
-        client = boto3.client('lambda', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('lambda')
         response = client.get_function_configuration(FunctionName=function_name)
         
         config = {
@@ -211,22 +210,22 @@ def get_lambda_config(function_name: str, region: str = None) -> str:
 
 
 @tool
-def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_definition(state_machine_arn: str) -> str:
     """
     Get Step Functions state machine definition.
     
     Args:
         state_machine_arn: The state machine ARN
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with state machine definition
     """
-    import boto3
     
     try:
-        client = boto3.client('stepfunctions', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('stepfunctions')
         response = client.describe_state_machine(stateMachineArn=state_machine_arn)
         
         config = {
@@ -246,22 +245,22 @@ def get_stepfunctions_definition(state_machine_arn: str, region: str = None) -> 
 
 
 @tool
-def get_xray_trace(trace_id: str, region: str = None) -> str:
-    region = region or get_region()
+def get_xray_trace(trace_id: str) -> str:
     """
     Get X-Ray trace details.
     
     Args:
         trace_id: The X-Ray trace ID
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with trace details
     """
-    import boto3
     
     try:
-        client = boto3.client('xray', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('xray')
         response = client.batch_get_traces(TraceIds=[trace_id])
         
         if response.get('Traces'):
@@ -280,24 +279,24 @@ def get_xray_trace(trace_id: str, region: str = None) -> str:
 
 
 @tool
-def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_cloudwatch_logs(log_group: str, hours_back: int = 1) -> str:
     """
     Get CloudWatch logs for a log group.
     
     Args:
         log_group: The CloudWatch log group name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with log events
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         start_time = int((datetime.now() - timedelta(hours=hours_back)).timestamp() * 1000)
         end_time = int(datetime.now().timestamp() * 1000)
@@ -339,24 +338,24 @@ def get_cloudwatch_logs(log_group: str, hours_back: int = 1, region: str = None)
 
 
 @tool
-def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_lambda_logs(function_name: str, hours_back: int = 1) -> str:
     """
     Get CloudWatch logs for a Lambda function.
     
     Args:
         function_name: The Lambda function name
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Lambda log events
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         # Lambda log group format
         log_group = f"/aws/lambda/{function_name}"
@@ -402,8 +401,7 @@ def get_lambda_logs(function_name: str, hours_back: int = 1, region: str = None)
 
 
 @tool
-def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int = 1) -> str:
     """
     Get CloudWatch logs for an API Gateway.
     
@@ -411,16 +409,17 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
         api_id: The API Gateway REST API ID
         stage_name: The stage name (e.g., 'test', 'prod')
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with API Gateway log events
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         # API Gateway log group format
         log_group = f"API-Gateway-Execution-Logs_{api_id}/{stage_name}"
@@ -467,24 +466,24 @@ def get_apigateway_logs(api_id: str, stage_name: str = "test", hours_back: int =
 
 
 @tool
-def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1, region: str = None) -> str:
-    region = region or get_region()
+def get_stepfunctions_logs(state_machine_arn: str, hours_back: int = 1) -> str:
     """
     Get CloudWatch logs for a Step Functions state machine.
     
     Args:
         state_machine_arn: The Step Functions state machine ARN
         hours_back: Number of hours to look back (default: 1)
-        region: AWS region (default: from environment)
     
     Returns:
         JSON string with Step Functions log events
     """
-    import boto3
     from datetime import datetime, timedelta
     
     try:
-        client = boto3.client('logs', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('logs')
         
         # Extract state machine name from ARN
         state_machine_name = state_machine_arn.split(':')[-1]

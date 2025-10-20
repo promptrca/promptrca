@@ -23,6 +23,7 @@ Lead Orchestrator Agent - Multi-Agent System for AWS Incident Investigation
 
 import asyncio
 import json
+import traceback
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -219,17 +220,128 @@ RULES:
 
 OUTPUT: Relay specialist findings"""
         
-        # Build tools list based on MCP availability
-        tools = [
-            # X-Ray and AWS tools
+        # Build tools list - no binding needed since tools get client from context
+        from ..tools import (
+            # X-Ray tools
             get_xray_trace,
+            get_xray_service_graph,
+            get_xray_trace_summaries,
+            get_all_resources_from_trace,
+            query_logs_by_trace_id,
+            # Lambda tools
             get_lambda_config,
-            get_api_gateway_stage_config,
-            get_stepfunctions_definition,
-            get_iam_role_config,
             get_lambda_logs,
+            get_lambda_metrics,
+            get_lambda_layers,
+            # API Gateway tools
+            get_api_gateway_stage_config,
             get_apigateway_logs,
+            get_api_gateway_metrics,
+            resolve_api_gateway_id,
+            # Step Functions tools
+            get_stepfunctions_definition,
             get_stepfunctions_logs,
+            get_stepfunctions_execution_details,
+            get_stepfunctions_metrics,
+            # IAM tools
+            get_iam_role_config,
+            get_iam_policy_document,
+            simulate_iam_policy,
+            get_iam_user_policies,
+            # CloudWatch tools
+            get_cloudwatch_logs,
+            get_cloudwatch_metrics,
+            get_cloudwatch_alarms,
+            list_cloudwatch_dashboards,
+            # VPC tools
+            get_vpc_config,
+            get_subnet_config,
+            get_security_group_config,
+            get_network_interface_config,
+            get_nat_gateway_config,
+            get_internet_gateway_config,
+            # SQS tools
+            get_sqs_queue_config,
+            get_sqs_queue_metrics,
+            get_sqs_dead_letter_queue,
+            list_sqs_queues,
+            # DynamoDB tools
+            get_dynamodb_table_config,
+            get_dynamodb_table_metrics,
+            describe_dynamodb_streams,
+            list_dynamodb_tables,
+            # SNS tools
+            get_sns_topic_config,
+            get_sns_topic_metrics,
+            get_sns_subscriptions,
+            list_sns_topics,
+            # S3 tools
+            get_s3_bucket_config,
+            get_s3_bucket_metrics,
+            list_s3_bucket_objects,
+            get_s3_bucket_policy,
+            # EventBridge tools
+            get_eventbridge_rule_config,
+            get_eventbridge_targets,
+            get_eventbridge_metrics,
+            list_eventbridge_rules,
+            get_eventbridge_bus_config,
+        )
+        
+        tools = [
+            # All AWS service tools (get client from context)
+            get_xray_trace,
+            get_xray_service_graph,
+            get_xray_trace_summaries,
+            get_all_resources_from_trace,
+            query_logs_by_trace_id,
+            get_lambda_config,
+            get_lambda_logs,
+            get_lambda_metrics,
+            get_lambda_layers,
+            get_api_gateway_stage_config,
+            get_apigateway_logs,
+            get_api_gateway_metrics,
+            resolve_api_gateway_id,
+            get_stepfunctions_definition,
+            get_stepfunctions_logs,
+            get_stepfunctions_execution_details,
+            get_stepfunctions_metrics,
+            get_iam_role_config,
+            get_iam_policy_document,
+            simulate_iam_policy,
+            get_iam_user_policies,
+            get_cloudwatch_logs,
+            get_cloudwatch_metrics,
+            get_cloudwatch_alarms,
+            list_cloudwatch_dashboards,
+            get_vpc_config,
+            get_subnet_config,
+            get_security_group_config,
+            get_network_interface_config,
+            get_nat_gateway_config,
+            get_internet_gateway_config,
+            get_sqs_queue_config,
+            get_sqs_queue_metrics,
+            get_sqs_dead_letter_queue,
+            list_sqs_queues,
+            get_dynamodb_table_config,
+            get_dynamodb_table_metrics,
+            describe_dynamodb_streams,
+            list_dynamodb_tables,
+            get_sns_topic_config,
+            get_sns_topic_metrics,
+            get_sns_subscriptions,
+            list_sns_topics,
+            get_s3_bucket_config,
+            get_s3_bucket_metrics,
+            list_s3_bucket_objects,
+            get_s3_bucket_policy,
+            get_eventbridge_rule_config,
+            get_eventbridge_targets,
+            get_eventbridge_metrics,
+            list_eventbridge_rules,
+            get_eventbridge_bus_config,
             # Specialist agent tools
             self.lambda_tool,
             self.apigateway_tool,
@@ -306,6 +418,21 @@ OUTPUT: Relay specialist findings"""
             investigation_span.add_event("investigation.input", attributes={"data": input_data})
 
             try:
+                # 0. Create AWSClient with assumed role for entire investigation
+                from ..clients import AWSClient
+                from ..context import set_aws_client, clear_aws_client
+                
+                aws_client = AWSClient(
+                    region=region,
+                    role_arn=assume_role_arn,
+                    external_id=external_id
+                )
+                logger.info(f"Created AWSClient for account: {aws_client.account_id}")
+                
+                # Set AWS client in context for all tools to access
+                # Tools will retrieve it programmatically via get_aws_client()
+                set_aws_client(aws_client)
+                
                 # 1. Parse inputs
                 parsed_inputs = self._parse_inputs(inputs, region)
 
@@ -356,11 +483,10 @@ OUTPUT: Relay specialist findings"""
                 return report
             
             except Exception as e:
-                import traceback
                 logger.error(f"❌ Investigation failed: {e}")
                 logger.error(f"❌ Full traceback: {traceback.format_exc()}")
                 
-                # Return error report
+                # Create error report
                 from ..models.base import InvestigationReport
                 error_report = InvestigationReport(
                     run_id=investigation_id,
@@ -393,6 +519,10 @@ OUTPUT: Relay specialist findings"""
                 investigation_span.set_attribute("error.message", str(e))
                 
                 return error_report
+            
+            finally:
+                # Always clear AWS client context after investigation
+                clear_aws_client()
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str) -> ParsedInputs:
         """Parse inputs using the input parser agent."""
@@ -465,7 +595,7 @@ OUTPUT: Relay specialist findings"""
             for trace_id in context.trace_ids:
                 try:
                     # Use the specialized tool to extract ALL resources from trace
-                    resources_json = get_all_resources_from_trace(trace_id, region=self.region)
+                    resources_json = get_all_resources_from_trace(trace_id)
                     resources_data = json.loads(resources_json)
                     
                     if "error" not in resources_data:
@@ -519,7 +649,7 @@ OUTPUT: Relay specialist findings"""
             # Add trace data for immediate analysis
             try:
                 from ..tools import get_xray_trace
-                trace_data = get_xray_trace(context.trace_ids[0], region=self.region)
+                trace_data = get_xray_trace(context.trace_ids[0])
                 if trace_data and "error" not in trace_data:
                     prompt_parts.append(f"\nTRACE DATA FOR ANALYSIS:")
                     prompt_parts.append(f"```json")
@@ -901,7 +1031,7 @@ OUTPUT: Relay specialist findings"""
             from ..tools import get_xray_trace
             
             # Call the actual X-Ray trace tool
-            trace_json = get_xray_trace(trace_id, region=self.region)
+            trace_json = get_xray_trace(trace_id)
             trace_data = json.loads(trace_json)
             
             # Debug: Log the full trace data structure

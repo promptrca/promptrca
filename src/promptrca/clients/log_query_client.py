@@ -47,8 +47,8 @@ class LogQueryClient:
         if session:
             self.logs_client = session.client('logs', region_name=self.region)
         else:
-            import boto3
-            self.logs_client = boto3.client('logs', region_name=self.region)
+            # Use the shared session from base client
+            self.logs_client = self._session.client('logs', region_name=self.region)
 
     def query_lambda_failed_invocations(
         self,

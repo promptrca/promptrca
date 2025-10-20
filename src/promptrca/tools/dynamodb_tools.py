@@ -21,14 +21,13 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from strands import tool
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
-from ..utils.config import get_region
+from ..context import get_aws_client
 
 
 @tool
-def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
-    region = region or get_region()
+def get_dynamodb_table_config(table_name: str) -> str:
     """
     Retrieve comprehensive DynamoDB table configuration for capacity and performance analysis.
     
@@ -79,10 +78,11 @@ def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
     
     Note: This tool provides the current configuration, not historical changes.
     """
-    import boto3
-    
     try:
-        client = boto3.client('dynamodb', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('dynamodb')
         response = client.describe_table(TableName=table_name)
         table = response['Table']
         
@@ -111,8 +111,7 @@ def get_dynamodb_table_config(table_name: str, region: str = None) -> str:
 
 
 @tool
-def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: str = None) -> str:
-    region = region or get_region()
+def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24) -> str:
     """
     Retrieve CloudWatch metrics for DynamoDB table performance and throttling analysis.
     
@@ -155,11 +154,13 @@ def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: st
     
     Note: Metrics are aggregated in 1-hour periods for the specified time range.
     """
-    import boto3
     from datetime import datetime, timedelta
-    
+
     try:
-        client = boto3.client('cloudwatch', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=hours_back)
@@ -207,8 +208,7 @@ def get_dynamodb_table_metrics(table_name: str, hours_back: int = 24, region: st
 
 
 @tool
-def describe_dynamodb_streams(table_name: str, region: str = None) -> str:
-    region = region or get_region()
+def describe_dynamodb_streams(table_name: str) -> str:
     """
     Retrieve DynamoDB Streams configuration for real-time data processing analysis.
     
@@ -249,10 +249,11 @@ def describe_dynamodb_streams(table_name: str, region: str = None) -> str:
     
     Note: Stream information is retrieved from the table configuration and stream details.
     """
-    import boto3
-    
     try:
-        client = boto3.client('dynamodb', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('dynamodb')
         response = client.describe_table(TableName=table_name)
         table = response['Table']
         
@@ -269,7 +270,7 @@ def describe_dynamodb_streams(table_name: str, region: str = None) -> str:
         # If streams are enabled, get more details
         if config["stream_enabled"] and config["latest_stream_arn"]:
             try:
-                streams_client = boto3.client('dynamodbstreams', region_name=region)
+                streams_client = aws_client.get_client('dynamodbstreams')
                 stream_response = streams_client.describe_stream(StreamArn=config["latest_stream_arn"])
                 stream = stream_response['StreamDescription']
                 
@@ -295,8 +296,7 @@ def describe_dynamodb_streams(table_name: str, region: str = None) -> str:
 
 
 @tool
-def list_dynamodb_tables(region: str = None) -> str:
-    region = region or get_region()
+def list_dynamodb_tables() -> str:
     """
     List all DynamoDB tables in the region for discovery and inventory purposes.
     
@@ -323,10 +323,11 @@ def list_dynamodb_tables(region: str = None) -> str:
     
     Note: This tool only lists table names, not their configurations or metrics.
     """
-    import boto3
-    
     try:
-        client = boto3.client('dynamodb', region_name=region)
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
+        client = aws_client.get_client('dynamodb')
         response = client.list_tables()
         
         tables = response.get('TableNames', [])

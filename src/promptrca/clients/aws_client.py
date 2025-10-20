@@ -235,3 +235,7 @@ class AWSClient:
         except Exception as e:
             logger.error(f"Failed to get trust policy: {e}")
             return None
+
+    def get_client(self, service_name: str):
+        """Get a boto3 client for the specified service."""
+        return self._session.client(service_name, region_name=self.region)
