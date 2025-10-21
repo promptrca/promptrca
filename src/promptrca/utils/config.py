@@ -438,6 +438,19 @@ def get_environment_info() -> Dict[str, str]:
     }
 
 
+# Global flag to prevent duplicate telemetry initialization
+_telemetry_initialized = False
+
+def reset_telemetry_initialization() -> None:
+    """
+    Reset the telemetry initialization flag.
+    
+    This is primarily for testing purposes to allow re-initialization
+    of telemetry in test environments.
+    """
+    global _telemetry_initialized
+    _telemetry_initialized = False
+
 def setup_strands_telemetry() -> None:
     """
     Set up Strands OpenTelemetry tracing for observability.
@@ -448,7 +461,17 @@ def setup_strands_telemetry() -> None:
     - Any other OTLP-compatible backend
     
     The backend is determined by the OTEL_EXPORTER_OTLP_ENDPOINT URL and available credentials.
+    
+    This function is idempotent - calling it multiple times will not create duplicate
+    telemetry configurations.
     """
+    global _telemetry_initialized
+    
+    # Prevent duplicate initialization
+    if _telemetry_initialized:
+        print("🔄 Strands telemetry already initialized, skipping duplicate setup")
+        return
+    
     try:
         from strands.telemetry import StrandsTelemetry
         
@@ -512,6 +535,9 @@ def setup_strands_telemetry() -> None:
         # Set up console exporter for development (optional)
         if os.getenv("OTEL_CONSOLE_EXPORT", "false").lower() == "true":
             strands_telemetry.setup_console_exporter()
+        
+        # Mark telemetry as successfully initialized
+        _telemetry_initialized = True
         
     except ImportError as e:
         print(f"⚠️  Strands telemetry not available: {e}")

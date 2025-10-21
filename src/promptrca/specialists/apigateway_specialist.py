@@ -63,6 +63,11 @@ class APIGatewaySpecialist(BaseSpecialist):
                     }
                 ))
                 
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for API Gateway config analysis: {e}")
+            else:
+                self.logger.debug(f"Failed to get API Gateway config for {api_id}: {e}")
         except Exception as e:
             self.logger.debug(f"Failed to get API Gateway config for {api_id}: {e}")
         
@@ -90,6 +95,11 @@ class APIGatewaySpecialist(BaseSpecialist):
                     }
                 ))
                 
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for API Gateway metrics analysis: {e}")
+            else:
+                self.logger.debug(f"Failed to get API Gateway metrics for {api_id}: {e}")
         except Exception as e:
             self.logger.debug(f"Failed to get API Gateway metrics for {api_id}: {e}")
         

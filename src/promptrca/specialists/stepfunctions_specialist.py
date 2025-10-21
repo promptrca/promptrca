@@ -99,6 +99,23 @@ class StepFunctionsSpecialist(BaseSpecialist):
                 error_msg = exec_details.get('error', 'Unknown error')
                 facts.extend(self._analyze_execution_error(error_msg, execution_arn))
                 
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for Step Functions execution analysis: {e}")
+                facts.append(self._create_fact(
+                    source='stepfunctions_execution',
+                    content=f"AWS client context not available for Step Functions analysis",
+                    confidence=0.9,
+                    metadata={'execution_arn': execution_arn, 'error': 'aws_client_context_missing'}
+                ))
+            else:
+                self.logger.debug(f"Step Functions execution analysis failed: {e}")
+                facts.append(self._create_fact(
+                    source='stepfunctions_execution',
+                    content=f"Step Functions analysis failed: {str(e)}",
+                    confidence=0.7,
+                    metadata={'execution_arn': execution_arn, 'error': str(e)}
+                ))
         except Exception as e:
             self.logger.debug(f"Step Functions execution analysis failed: {e}")
             facts.append(self._create_fact(

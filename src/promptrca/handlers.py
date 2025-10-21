@@ -28,7 +28,6 @@ from typing import Dict, Any, Optional
 from strands import Agent
 
 from .core import PromptRCAInvestigator
-from .agents.lead_orchestrator import LeadOrchestratorAgent
 from .utils.config import get_region, create_orchestrator_model
 from .utils import get_logger
 
@@ -134,6 +133,19 @@ def _handle_free_text_investigation(
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle free text investigation using Swarm orchestration."""
+    # Use Strands built-in tracing for the entire investigation
+    from strands.telemetry.tracer import get_tracer
+    strands_tracer = get_tracer()
+    
+    # Create task description for tracing
+    task_description = f"AWS Infrastructure Investigation: {free_text}"
+    
+    # Start Strands multiagent span for the entire investigation
+    investigation_span = strands_tracer.start_multiagent_span(
+        task=task_description,
+        instance="promptrca_investigation"
+    )
+    
     try:
         from .core.swarm_orchestrator import SwarmOrchestrator
 
@@ -145,7 +157,7 @@ def _handle_free_text_investigation(
             "free_text_input": free_text
         }
 
-        # Run Swarm investigation (async)
+        # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
@@ -156,9 +168,16 @@ def _handle_free_text_investigation(
         response["investigation"]["input_type"] = "free_text"
         response["investigation"]["original_input"] = free_text
 
+        # End the span with successful result
+        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        strands_tracer.end_swarm_span(investigation_span, result=result_summary)
+
         return response
 
     except Exception as e:
+        # End the span with error
+        strands_tracer.end_span_with_error(investigation_span, f"Investigation failed: {str(e)}", e)
+        
         return {
             "success": False,
             "error": f"Multi-agent investigation failed: {str(e)}"
@@ -173,6 +192,19 @@ def _handle_investigation_inputs(
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle investigation_inputs using Swarm orchestration."""
+    # Use Strands built-in tracing for the entire investigation
+    from strands.telemetry.tracer import get_tracer
+    strands_tracer = get_tracer()
+    
+    # Create task description for tracing
+    task_description = f"AWS Infrastructure Investigation: {investigation_inputs}"
+    
+    # Start Strands multiagent span for the entire investigation
+    investigation_span = strands_tracer.start_multiagent_span(
+        task=task_description,
+        instance="promptrca_investigation"
+    )
+    
     try:
         from .core.swarm_orchestrator import SwarmOrchestrator
 
@@ -184,7 +216,7 @@ def _handle_investigation_inputs(
             "investigation_inputs": investigation_inputs
         }
 
-        # Run Swarm investigation (async)
+        # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
 
         # Convert to structured response
@@ -195,9 +227,16 @@ def _handle_investigation_inputs(
         response["investigation"]["input_type"] = "investigation_inputs"
         response["investigation"]["original_input"] = investigation_inputs
 
+        # End the span with successful result
+        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        strands_tracer.end_swarm_span(investigation_span, result=result_summary)
+
         return response
 
     except Exception as e:
+        # End the span with error
+        strands_tracer.end_span_with_error(investigation_span, f"Investigation failed: {str(e)}", e)
+        
         return {
             "success": False,
             "error": f"Multi-agent investigation failed: {str(e)}"

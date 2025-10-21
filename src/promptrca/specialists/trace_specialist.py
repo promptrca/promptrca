@@ -31,7 +31,7 @@ class TraceSpecialist(BaseSpecialist):
         self.logger.info(f"   → Analyzing trace {trace_id} deeply...")
         
         try:
-            from ..tools import get_xray_trace
+            from ..tools.xray_tools import get_xray_trace
             self.logger.info(f"     → Getting trace data for {trace_id}...")
             
             trace_json = get_xray_trace(trace_id)
@@ -80,6 +80,23 @@ class TraceSpecialist(BaseSpecialist):
             # Analyze segments for service interactions and errors
             facts.extend(self._analyze_segments(segments, trace_id))
 
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for trace analysis: {e}")
+                facts.append(self._create_fact(
+                    source='xray_trace',
+                    content=f"AWS client context not available for trace analysis",
+                    confidence=0.9,
+                    metadata={'trace_id': trace_id, 'error': 'aws_client_context_missing'}
+                ))
+            else:
+                self.logger.error(f"Failed to analyze trace {trace_id}: {e}")
+                facts.append(self._create_fact(
+                    source='xray_trace',
+                    content=f"Trace analysis failed for {trace_id}: {str(e)}",
+                    confidence=0.8,
+                    metadata={'trace_id': trace_id, 'error': True}
+                ))
         except Exception as e:
             self.logger.error(f"Failed to analyze trace {trace_id}: {e}")
             self.logger.error(f"Exception type: {type(e).__name__}")

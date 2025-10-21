@@ -77,6 +77,11 @@ class LambdaSpecialist(BaseSpecialist):
                         }
                     ))
                     
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for Lambda config analysis: {e}")
+            else:
+                self.logger.debug(f"Failed to get Lambda config for {function_name}: {e}")
         except Exception as e:
             self.logger.debug(f"Failed to get Lambda config for {function_name}: {e}")
         
@@ -122,6 +127,11 @@ class LambdaSpecialist(BaseSpecialist):
                             }
                         ))
                         
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for Lambda metrics analysis: {e}")
+            else:
+                self.logger.debug(f"Failed to get Lambda metrics for {function_name}: {e}")
         except Exception as e:
             self.logger.debug(f"Failed to get Lambda metrics for {function_name}: {e}")
         
@@ -178,6 +188,11 @@ class LambdaSpecialist(BaseSpecialist):
                                 }
                             ))
                             
+        except RuntimeError as e:
+            if "AWS client" in str(e):
+                self.logger.error(f"AWS client context not available for Lambda failed invocations analysis: {e}")
+            else:
+                self.logger.debug(f"Failed to get Lambda failed invocations for {function_name}: {e}")
         except Exception as e:
             self.logger.debug(f"Failed to get Lambda failed invocations for {function_name}: {e}")
         
