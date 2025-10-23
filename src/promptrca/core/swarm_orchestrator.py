@@ -476,8 +476,8 @@ class SwarmOrchestrator:
                 swarm_result, resources, investigation_start_time, region
             )
             
-            # Add flow control and cost information to report
-            report = self._enhance_report_with_flow_control_data(report, self.investigation_progress)
+            # Cost control metadata removed - OpenTelemetry handles observability
+            # report = self._enhance_report_with_flow_control_data(report, self.investigation_progress)
             
             duration = (datetime.now(timezone.utc) - investigation_start_time).total_seconds()
             logger.info("=" * 80)
