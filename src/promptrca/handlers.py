@@ -68,6 +68,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         # Check for free text input (primary method)
         if "free_text_input" in payload:
+            print(f"🔍 Debug: Taking free_text_input path")
             return _handle_free_text_investigation(
                 payload["free_text_input"],
                 region,
@@ -87,6 +88,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Fallback to legacy structured input
+        print(f"🔍 Debug: Taking legacy path")
         function_name = payload.get("function_name")
         xray_trace_id = payload.get("xray_trace_id")
         investigation_target = payload.get("investigation_target", {})
@@ -106,6 +108,11 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         # Run investigation (async)
         report = asyncio.run(investigator.investigate(function_name=function_name))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Legacy handler received report type: {type(report)}")
+        print(f"🔍 Debug: Legacy handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Legacy handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()
@@ -133,6 +140,8 @@ def _handle_free_text_investigation(
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle free text investigation using Swarm orchestration."""
+    print(f"🔍 Debug: _handle_free_text_investigation called with free_text: {free_text}")
+    
     # Use Strands built-in tracing for the entire investigation
     from strands.telemetry.tracer import get_tracer
     strands_tracer = get_tracer()
@@ -147,6 +156,7 @@ def _handle_free_text_investigation(
     )
     
     try:
+        print(f"🔍 Debug: Starting SwarmOrchestrator import")
         from .core.swarm_orchestrator import SwarmOrchestrator
 
         # Initialize Swarm orchestrator
@@ -159,6 +169,11 @@ def _handle_free_text_investigation(
 
         # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Handler received report type: {type(report)}")
+        print(f"🔍 Debug: Handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()
@@ -175,6 +190,10 @@ def _handle_free_text_investigation(
         return response
 
     except Exception as e:
+        print(f"🔍 Debug: Exception in _handle_free_text_investigation: {str(e)}")
+        import traceback
+        print(f"🔍 Debug: Traceback: {traceback.format_exc()}")
+        
         # End the span with error
         strands_tracer.end_span_with_error(investigation_span, f"Investigation failed: {str(e)}", e)
         
@@ -218,6 +237,11 @@ def _handle_investigation_inputs(
 
         # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Handler received report type: {type(report)}")
+        print(f"🔍 Debug: Handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()

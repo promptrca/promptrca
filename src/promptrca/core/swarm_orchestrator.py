@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from enum import Enum
 
-from strands.multiagent import Swarm
+from strands.multiagent import Swarm, GraphBuilder
 
 from ..models import (
     InvestigationReport, Fact, Hypothesis, Advice,
@@ -29,7 +29,7 @@ from ..clients import AWSClient
 from ..context import set_aws_client, clear_aws_client
 from ..utils.config import get_region
 from ..utils import get_logger
-from ..agents.swarm_agents import create_swarm_agents
+from ..agents.swarm_agents import create_specialist_swarm_agents, create_hypothesis_agent_standalone, create_root_cause_agent_standalone, create_swarm_agents
 from ..specialists import InvestigationContext
 from .swarm_tools import (
     # Re-export resource type constants for backward compatibility
@@ -153,8 +153,8 @@ class SwarmOrchestrator:
         # Create specialized agents for the swarm
         self._create_specialist_agents()
         
-        # Create the investigation swarm using Strands pattern
-        self._create_investigation_swarm()
+        # Create the investigation graph using Strands pattern
+        self._create_investigation_graph()
         
         # Circuit breaker for tool failures
         self.tool_failure_count = 0
@@ -303,35 +303,55 @@ class SwarmOrchestrator:
             elif agent.name == "root_cause_analyzer":
                 self.root_cause_agent = agent
     
-    def _create_investigation_swarm(self):
-        """Create the investigation swarm using imported agents with cost control configuration."""
-        # Use cost control configuration with environment variable overrides
-        config = self.cost_control_config
-        max_handoffs = int(os.getenv('SWARM_MAX_HANDOFFS', str(config.max_handoffs)))
-        max_iterations = int(os.getenv('SWARM_MAX_ITERATIONS', str(config.max_iterations)))
-        execution_timeout = float(os.getenv('SWARM_EXECUTION_TIMEOUT', str(config.execution_timeout)))
-        node_timeout = float(os.getenv('SWARM_NODE_TIMEOUT', str(config.node_timeout)))
+    def _create_investigation_graph(self):
+        """Create investigation graph with Swarm + post-processing nodes."""
         
-        # Create the swarm with all specialist agents from agent factory
-        agents = create_swarm_agents()
-        
-        # Find the trace agent to use as entry point
-        trace_agent = next((agent for agent in agents if agent.name == "trace_specialist"), None)
+        # Create specialist swarm (without hypothesis/root_cause agents)
+        specialist_agents = create_specialist_swarm_agents()
+        trace_agent = next((a for a in specialist_agents if a.name == "trace_specialist"), None)
         if not trace_agent:
-            raise ValueError("trace_specialist agent not found in swarm agents")
+            raise ValueError("trace_specialist agent not found in specialist agents")
         
-        # Create the swarm with strict cost control configuration
-        self.swarm = Swarm(
-            agents,
-            entry_point=trace_agent,  # Start with trace analysis
-            max_handoffs=max_handoffs,
-            max_iterations=max_iterations,
-            execution_timeout=execution_timeout,
-            node_timeout=node_timeout,
-            # Add repetitive handoff detection to prevent ping-pong behavior
-            repetitive_handoff_detection_window=config.repetitive_handoff_detection_window,
-            repetitive_handoff_min_unique_agents=config.repetitive_handoff_min_unique_agents
+        specialist_swarm = Swarm(
+            specialist_agents,
+            entry_point=trace_agent,
+            max_handoffs=12,
+            max_iterations=15,
+            execution_timeout=450.0,
+            node_timeout=60.0,
+            repetitive_handoff_detection_window=8,
+            repetitive_handoff_min_unique_agents=3
         )
+        
+        # Create hypothesis generator agent
+        hypothesis_agent = create_hypothesis_agent_standalone()
+        
+        # Create structured report generator custom node
+        from .structured_report_node import StructuredReportNode
+        report_generator = StructuredReportNode(region=self.region)
+        
+        # Build the graph
+        builder = GraphBuilder()
+        builder.add_node(specialist_swarm, "investigation")
+        builder.add_node(hypothesis_agent, "hypothesis_generation")
+        builder.add_node(report_generator, "report_generation")
+        
+        # Define edges (deterministic flow)
+        builder.add_edge("investigation", "hypothesis_generation")
+        builder.add_edge("hypothesis_generation", "report_generation")
+        
+        # Set entry point
+        builder.set_entry_point("investigation")
+        
+        # Set timeouts
+        builder.set_execution_timeout(600.0)  # 10 minutes total
+        builder.set_node_timeout(300.0)  # 5 minutes per node
+        
+        # Build and return graph
+        self.graph = builder.build()
+        
+        # For backward compatibility
+        self.swarm = specialist_swarm  # The swarm node from the graph
     
     async def investigate(
         self,
@@ -427,61 +447,70 @@ class SwarmOrchestrator:
                 resources, parsed_inputs, investigation_context
             )
             
-            # Execute swarm investigation with flow control
-            logger.info("🤖 Step 3: Executing swarm investigation with flow control...")
+            # Execute graph investigation with proper context sharing
+            logger.info("🤖 Step 3: Executing graph investigation...")
             
-            # Set AWS client in context before swarm execution
-            # Also pass it through invocation_state for tools that need it
+            # Set AWS client in context before graph execution
             set_aws_client(aws_client)
             
             try:
-                # Update phase to trace analysis
-                self._update_investigation_phase(self.investigation_progress, InvestigationPhase.TRACE_ANALYSIS, "trace_specialist")
-                
-                # Execute swarm with comprehensive error handling and graceful degradation
-                swarm_result = self._execute_swarm_with_graceful_degradation(
+                # Execute graph with comprehensive error handling
+                graph_result = self.graph(
                     investigation_prompt,
-                    aws_client,
-                    resources,
-                    investigation_context,
-                    region,
-                    parsed_inputs,
-                    investigation_id
+                    invocation_state={
+                        "aws_client": aws_client,
+                        "resources": resources,
+                        "investigation_context": investigation_context,
+                        "region": region,
+                        "trace_ids": parsed_inputs.trace_ids,
+                        "investigation_id": investigation_id,
+                        "investigation_start_time": investigation_start_time,
+                        "debug_mode": os.getenv('DEBUG_MODE', False)
+                    }
                 )
                 
-                # Update token usage from swarm result if available
-                if hasattr(swarm_result, 'usage') or hasattr(swarm_result, 'token_usage'):
-                    self._update_token_usage(self.investigation_progress, swarm_result)
-                
-                # Check for early termination conditions after execution
-                termination_reason = self._check_early_termination_conditions(self.investigation_progress, resources)
-                if termination_reason:
-                    logger.warning(f"⚠️ Early termination triggered: {termination_reason}")
-                    self.investigation_progress.early_termination_triggered = True
-                    self.investigation_progress.termination_reason = termination_reason
+                # Extract report from report_generation node
+                report_node_result = graph_result.results.get("report_generation")
+                if report_node_result and hasattr(report_node_result, 'result'):
+                    # The structured report node returns a MultiAgentResult, extract the InvestigationReport
+                    if hasattr(report_node_result.result, 'results'):
+                        # Extract from the nested MultiAgentResult
+                        nested_result = report_node_result.result.results.get("report_generator")
+                        if nested_result and hasattr(nested_result, 'result'):
+                            report = nested_result.result
+                        else:
+                            # Fallback if nested extraction failed
+                            report = self._create_fallback_report(
+                                investigation_id, investigation_start_time, region, resources, 
+                                "Failed to extract report from nested MultiAgentResult"
+                            )
+                    else:
+                        # Direct result
+                        report = report_node_result.result
+                else:
+                    # Fallback if report generation failed
+                    report = self._create_fallback_report(
+                        investigation_id, investigation_start_time, region, resources, 
+                        "Report generation node did not return results"
+                    )
                 
             except Exception as e:
-                logger.error(f"Swarm execution wrapper failed: {e}")
-                self.investigation_progress.early_termination_triggered = True
-                self.investigation_progress.termination_reason = f"Critical error: {str(e)}"
-                # Create fallback result with partial analysis
-                swarm_result = self._create_fallback_result(resources, str(e))
-            
-            # Mark investigation as completed
-            self._update_investigation_phase(self.investigation_progress, InvestigationPhase.COMPLETED)
-            
-            # Parse swarm results into investigation report
-            logger.info("📄 Step 4: Parsing swarm results into investigation report...")
-            report = self._parse_swarm_results_to_report(
-                swarm_result, resources, investigation_start_time, region
-            )
+                logger.error(f"Graph execution failed: {e}")
+                # Create fallback report
+                report = self._create_fallback_report(
+                    investigation_id, investigation_start_time, region, resources, str(e)
+                )
             
             # Cost control metadata removed - OpenTelemetry handles observability
             # report = self._enhance_report_with_flow_control_data(report, self.investigation_progress)
             
             duration = (datetime.now(timezone.utc) - investigation_start_time).total_seconds()
             logger.info("=" * 80)
-            logger.info(f"✅ SWARM INVESTIGATION COMPLETE in {duration:.2f}s")
+            logger.info(f"✅ GRAPH INVESTIGATION COMPLETE in {duration:.2f}s")
+            logger.info(f"🔍 Debug: Returning report type: {type(report)}")
+            logger.info(f"🔍 Debug: Returning report has to_dict: {hasattr(report, 'to_dict')}")
+            from ..models import InvestigationReport
+            logger.info(f"🔍 Debug: Returning report is InvestigationReport: {isinstance(report, InvestigationReport)}")
             logger.info("=" * 80)
             
             return report
@@ -1516,4 +1545,44 @@ Next Steps:
             advice=[],
             timeline=[],
             summary=json.dumps({"error": error, "investigation_success": False})
+        )
+    
+    def _create_fallback_report(
+        self,
+        investigation_id: str,
+        start_time: datetime,
+        region: str,
+        resources: List[Dict[str, Any]],
+        error: str
+    ) -> InvestigationReport:
+        """Create fallback InvestigationReport when graph execution fails."""
+        end_time = datetime.now(timezone.utc)
+        duration = (end_time - start_time).total_seconds()
+        
+        return InvestigationReport(
+            run_id=investigation_id,
+            status="completed",
+            started_at=start_time,
+            completed_at=end_time,
+            duration_seconds=duration,
+            affected_resources=[],
+            severity_assessment=SeverityAssessment(
+                severity="unknown",
+                impact_scope="unknown",
+                affected_resource_count=len(resources),
+                user_impact="unknown",
+                confidence=0.0,
+                reasoning=f"Graph execution failed: {error}"
+            ),
+            facts=[],
+            root_cause_analysis=RootCauseAnalysis(
+                primary_root_cause=None,
+                contributing_factors=[],
+                confidence_score=0.0,
+                analysis_summary=f"Investigation failed: {error}"
+            ),
+            hypotheses=[],
+            advice=[],
+            timeline=[],
+            summary=f"Investigation failed: {error}"
         )

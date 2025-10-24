@@ -219,20 +219,75 @@ def create_root_cause_agent() -> Agent:
     )
 
 
+def create_specialist_swarm_agents() -> List[Agent]:
+    """
+    Create only the specialist agents for the investigation swarm.
+    
+    Returns specialist agents that investigate AWS resources:
+    - Entry point agent (trace_specialist)
+    - Service specialist agents (lambda, apigateway, stepfunctions, iam, s3, sqs, sns)
+    
+    These agents autonomously investigate and hand off to each other based on findings.
+    Analysis agents (hypothesis_generator, root_cause_analyzer) are handled separately
+    in the Graph pattern.
+    
+    Returns:
+        List of specialist Agent instances for Swarm orchestration
+    """
+    return [
+        # Entry point agent
+        create_trace_agent(),
+        
+        # Core service specialists
+        create_lambda_agent(),
+        create_apigateway_agent(),
+        create_stepfunctions_agent(),
+        
+        # Infrastructure specialists
+        create_iam_agent(),
+        create_s3_agent(),
+        create_sqs_agent(),
+        create_sns_agent()
+    ]
+
+
+def create_hypothesis_agent_standalone() -> Agent:
+    """
+    Create the hypothesis generator agent (used outside swarm).
+    
+    This agent analyzes findings from specialist agents and generates
+    structured hypotheses about root causes. Used as a standalone Graph node.
+    
+    Returns:
+        Agent configured for hypothesis generation
+    """
+    return create_hypothesis_agent()
+
+
+def create_root_cause_agent_standalone() -> Agent:
+    """
+    Create the root cause analyzer agent (used outside swarm).
+    
+    This agent analyzes hypotheses and determines the most likely root cause.
+    Used as a standalone Graph node.
+    
+    Returns:
+        Agent configured for root cause analysis
+    """
+    return create_root_cause_agent()
+
+
 def create_swarm_agents() -> List[Agent]:
     """
     Create all swarm agents following Strands best practices.
+    
+    DEPRECATED: Use create_specialist_swarm_agents() instead.
+    This function is kept for backward compatibility.
     
     Returns a complete list of agents for the investigation swarm including:
     - Entry point agent (trace_specialist)
     - Service specialist agents (lambda, apigateway, stepfunctions, iam, s3, sqs, sns)
     - Analysis agents (hypothesis_generator, root_cause_analyzer)
-    
-    The agents are configured with:
-    - Descriptive names that reflect specialties
-    - Clear role definitions with strict handoff rules
-    - Explicit termination conditions to prevent infinite loops
-    - Complementary skills for comprehensive analysis
     
     Returns:
         List of Agent instances ready for Swarm orchestration
