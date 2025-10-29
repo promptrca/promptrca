@@ -110,6 +110,19 @@ CONFIDENCE CALIBRATION EXAMPLES:
 - "high error rate" → error_rate, confidence=0.70 (single metric without root cause)
 - "AccessDenied when calling PutObject" → permission_issue, confidence=0.92 (explicit permission error)
 
+AWS-SPECIFIC PATTERNS (critical for cloud investigations):
+- "API Gateway invoked Step Functions" + "HTTP 200" + "lacks StartSyncExecution permission" → permission_issue, confidence=0.90
+- "HTTP 200" + "AccessDeniedException in response body" → permission_issue, confidence=0.95
+- "Lambda timeout=30s" + "duration=29.9s" → timeout, confidence=0.85
+- "API Gateway → Step Functions" + "missing IAM role" → configuration_error, confidence=0.88
+- "Step Functions call returned HTTP 200" + "execution logs show permission denied" → permission_issue, confidence=0.92
+
+IMPORTANT AWS BEHAVIOR:
+- HTTP 200 responses can contain permission errors in the response body
+- API Gateway → Step Functions integration requires specific IAM permissions (states:StartSyncExecution)
+- Service-to-service calls may succeed at HTTP level but fail at application level
+- Always check IAM permissions when services interact, even with HTTP 200
+
 HYPOTHESIS TYPES:
 permission_issue, configuration_error, code_bug, timeout, resource_constraint, integration_failure, infrastructure_issue
 

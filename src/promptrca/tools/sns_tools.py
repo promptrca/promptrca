@@ -83,6 +83,9 @@ def get_sns_topic_metrics(topic_name: str, hours_back: int = 24) -> str:
     from datetime import datetime, timedelta
     
     try:
+        # Get AWS client from context
+        aws_client = get_aws_client()
+        region = aws_client.region
         client = aws_client.get_client('cloudwatch')
         
         end_time = datetime.utcnow()

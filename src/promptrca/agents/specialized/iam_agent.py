@@ -25,6 +25,10 @@ from ...tools.aws_tools import (
     get_iam_role_config,
     get_cloudwatch_logs
 )
+from ...tools.cloudtrail_tools import (
+    get_iam_policy_changes,
+    get_recent_cloudtrail_events
+)
 
 
 def create_iam_agent(model) -> Agent:
@@ -58,11 +62,14 @@ INVESTIGATION METHODOLOGY (follow these steps sequentially):
    - Trust relationship error messages
 
 4. **Detailed Historical Review**:
+   - **USE get_iam_policy_changes() to check for recent IAM policy modifications**
+   - **USE get_recent_cloudtrail_events() to check for role/policy changes**
    - Check for similar past permission issues with this principal
    - Review recent policy change history (attached policies, inline policies, trust policy updates)
    - Examine permission boundary modifications
    - Identify any correlated IAM changes (role deletions, policy updates, SCP changes)
    - Review access advisor data for permission usage patterns
+   - **Look for AttachRolePolicy, DetachRolePolicy, PutRolePolicy, UpdateAssumeRolePolicy events**
 
 5. **Environmental Variables and Changes**:
    - Analyze recent policy updates with specific timestamps

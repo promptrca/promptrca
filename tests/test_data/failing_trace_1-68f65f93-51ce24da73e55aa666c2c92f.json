@@ -1,0 +1,20 @@
+{
+    "Traces": [
+        {
+            "Id": "1-68f65f93-51ce24da73e55aa666c2c92f",
+            "Duration": 0.061,
+            "LimitExceeded": false,
+            "Segments": [
+                {
+                    "Id": "41c2d8fd0760a015",
+                    "Document": "{\"id\":\"41c2d8fd0760a015\",\"name\":\"sherlock-test-test-api/test\",\"start_time\":1.760976787682E9,\"trace_id\":\"1-68f65f93-51ce24da73e55aa666c2c92f\",\"end_time\":1.760976787743E9,\"http\":{\"request\":{\"url\":\"https://142gh05m9a.execute-api.eu-west-1.amazonaws.com/test/apigateway-permission\",\"method\":\"POST\",\"user_agent\":\"PostmanRuntime/7.49.0\",\"client_ip\":\"152.37.116.226\",\"x_forwarded_for\":true},\"response\":{\"status\":200,\"content_length\":0}},\"aws\":{\"api_gateway\":{\"account_id\":\"840181656986\",\"rest_api_id\":\"142gh05m9a\",\"stage\":\"test\",\"request_id\":\"3f951bbe-3446-4c8d-bc79-d2d5786f02f7\"}},\"annotations\":{\"aws:api_id\":\"142gh05m9a\",\"aws:api_stage\":\"test\"},\"metadata\":{\"default\":{\"extended_request_id\":\"SwPfIE_mjoEElLg=\",\"request_id\":\"3f951bbe-3446-4c8d-bc79-d2d5786f02f7\"}},\"origin\":\"AWS::ApiGateway::Stage\",\"resource_arn\":\"arn:aws:apigateway:eu-west-1::/restapis/142gh05m9a/stages/test\",\"subsegments\":[{\"id\":\"40d2f719082dd0b6\",\"name\":\"STEPFUNCTIONS\",\"start_time\":1.760976787715E9,\"end_time\":1.760976787715E9,\"http\":{\"request\":{\"url\":\"https://sync-states.eu-west-1.amazonaws.com/?Action=StartSyncExecution\",\"method\":\"POST\"},\"response\":{\"status\":200,\"content_length\":422}},\"aws\":{\"region\":\"eu-west-1\"},\"namespace\":\"aws\"}]}"
+                },
+                {
+                    "Id": "3262ea2b207d74e0",
+                    "Document": "{\"id\":\"3262ea2b207d74e0\",\"name\":\"STEPFUNCTIONS\",\"start_time\":1.760976787715E9,\"trace_id\":\"1-68f65f93-51ce24da73e55aa666c2c92f\",\"end_time\":1.760976787715E9,\"parent_id\":\"40d2f719082dd0b6\",\"inferred\":true,\"http\":{\"request\":{\"url\":\"https://sync-states.eu-west-1.amazonaws.com/?Action=StartSyncExecution\",\"method\":\"POST\"},\"response\":{\"status\":200,\"content_length\":422}},\"aws\":{\"region\":\"eu-west-1\"},\"origin\":\"AWS::STEPFUNCTIONS\"}"
+                }
+            ]
+        }
+    ],
+    "UnprocessedTraceIds": []
+}

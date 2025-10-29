@@ -136,12 +136,20 @@ class LeadOrchestratorAgent:
         if mcp_enabled:
             system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
 
-INVESTIGATION FLOW:
-1. If X-Ray trace ID provided → analyze trace data to discover service interactions and error flows
-2. From trace/context, identify AWS services involved in the incident
-3. Delegate to appropriate specialist agents based on discovered services and error patterns
-4. Use AWS Knowledge tools to get official documentation and best practices when relevant
-5. Synthesize findings from all specialists into a comprehensive analysis
+INVESTIGATION FLOW (CRITICAL ORDER):
+1. **FIRST: Check AWS Service Health** → Use check_aws_service_health() to rule out AWS-side issues
+2. **SECOND: Check CloudTrail** → Use get_recent_cloudtrail_events() to find recent configuration changes
+3. If X-Ray trace ID provided → analyze trace data to discover service interactions and error flows
+4. From trace/context, identify AWS services involved in the incident
+5. Delegate to appropriate specialist agents based on discovered services and error patterns
+6. Use AWS Knowledge tools to get official documentation and best practices when relevant
+7. Synthesize findings from all specialists into a comprehensive analysis
+
+WHY THIS ORDER MATTERS:
+- AWS Service Health: If AWS is down, don't waste time investigating your code
+- CloudTrail: 80% of incidents are caused by recent configuration changes
+- X-Ray: Shows the actual error flow and affected services
+- Specialists: Deep dive into specific service issues
 
 SPECIALIST DELEGATION STRATEGY:
 - Lambda functions: Delegate to Lambda specialist for function configuration, logs, and performance issues
@@ -172,11 +180,19 @@ OUTPUT: Relay specialist findings with AWS documentation context when relevant""
         else:
             system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
 
-INVESTIGATION FLOW:
-1. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
-2. From trace/context, identify AWS services involved
-3. Call appropriate specialist agent for each service (call ONCE per service)
-4. Return all findings - let downstream agents synthesize
+INVESTIGATION FLOW (CRITICAL ORDER):
+1. **FIRST: Check AWS Service Health** → Use check_aws_service_health() to rule out AWS-side issues
+2. **SECOND: Check CloudTrail** → Use get_recent_cloudtrail_events() to find recent configuration changes
+3. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
+4. From trace/context, identify AWS services involved
+5. Call appropriate specialist agent for each service (call ONCE per service)
+6. Return all findings - let downstream agents synthesize
+
+WHY THIS ORDER MATTERS:
+- AWS Service Health: If AWS is down, don't waste time investigating your code
+- CloudTrail: 80% of incidents are caused by recent configuration changes
+- X-Ray: Shows the actual error flow and affected services
+- Specialists: Deep dive into specific service issues
 
 AVAILABLE SPECIALISTS:
 - investigate_lambda_function(function_name, context)
@@ -222,6 +238,13 @@ OUTPUT: Relay specialist findings"""
         
         # Build tools list - no binding needed since tools get client from context
         from ..tools import (
+            # AWS Health and CloudTrail tools (CHECK THESE FIRST!)
+            check_aws_service_health,
+            get_account_health_events,
+            check_service_quota_status,
+            get_recent_cloudtrail_events,
+            find_correlated_changes,
+            get_iam_policy_changes,
             # X-Ray tools
             get_xray_trace,
             get_xray_service_graph,
@@ -289,6 +312,13 @@ OUTPUT: Relay specialist findings"""
         )
         
         tools = [
+            # AWS Health and CloudTrail tools (PRIORITY - check these first!)
+            check_aws_service_health,
+            get_account_health_events,
+            check_service_quota_status,
+            get_recent_cloudtrail_events,
+            find_correlated_changes,
+            get_iam_policy_changes,
             # All AWS service tools (get client from context)
             get_xray_trace,
             get_xray_service_graph,
@@ -928,15 +958,13 @@ OUTPUT: Relay specialist findings"""
                 metadata={"region": region, "source": "multi_agent"}
             ))
         
-        # Create root cause agent with proper AWS client for this investigation
+        # Create root cause agent for analysis (no AWS client needed - purely analytical)
         from .root_cause_agent import RootCauseAgent
-        from ..clients.aws_client import AWSClient
         from strands import Agent
-        aws_client = AWSClient(region=region, role_arn=assume_role_arn, external_id=external_id)
         # Use root cause agent specific model
         root_cause_model = create_root_cause_agent_model()
         root_cause_strands_agent = Agent(model=root_cause_model)
-        root_cause_agent = RootCauseAgent(aws_client=aws_client, strands_agent=root_cause_strands_agent)
+        root_cause_agent = RootCauseAgent(strands_agent=root_cause_strands_agent)
         
         # Use root cause agent to analyze and synthesize findings
         root_cause = root_cause_agent.analyze_root_cause(hypotheses, facts)

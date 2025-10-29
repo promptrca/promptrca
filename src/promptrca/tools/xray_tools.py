@@ -60,6 +60,31 @@ def get_xray_trace(trace_id: str) -> str:
         return json.dumps({"error": str(e), "trace_id": trace_id})
 
 
+def _parse_arn(arn: str) -> dict:
+    """
+    Parse AWS ARN to extract service and resource information.
+    
+    ARN format: arn:partition:service:region:account-id:resource-type/resource-id
+    """
+    if not arn or not arn.startswith('arn:'):
+        return {}
+    
+    try:
+        parts = arn.split(':')
+        if len(parts) < 6:
+            return {}
+        
+        return {
+            'partition': parts[1],
+            'service': parts[2], 
+            'region': parts[3],
+            'account_id': parts[4],
+            'resource': ':'.join(parts[5:])  # Resource part may contain colons
+        }
+    except:
+        return {}
+
+
 @tool
 def get_all_resources_from_trace(trace_id: str) -> str:
     """
@@ -101,18 +126,33 @@ def get_all_resources_from_trace(trace_id: str) -> str:
 
             segment_name = segment_doc.get('name', '')
             origin = segment_doc.get('origin', '')
+            resource_arn = segment_doc.get('resource_arn')
+
+            # Parse ARN if available for additional context
+            arn_info = _parse_arn(resource_arn) if resource_arn else {}
 
             # Extract resource info
             resource = None
 
-            # Lambda detection
-            if 'AWS::Lambda' in origin or 'lambda' in segment_name.lower():
+            # Lambda detection (from origin, segment name, or ARN)
+            if ('AWS::Lambda' in origin or 
+                'lambda' in segment_name.lower() or 
+                arn_info.get('service') == 'lambda'):
+                
                 func_name = segment_name
+                
+                # Extract function name from ARN if available and more reliable
+                if resource_arn and 'function:' in resource_arn:
+                    func_name = resource_arn.split('function:')[-1]
+                elif arn_info.get('resource', '').startswith('function/'):
+                    func_name = arn_info['resource'].split('function/')[-1]
+                
                 if func_name and func_name not in discovered:
                     resource = {
                         "type": "lambda",
                         "name": func_name,
-                        "arn": segment_doc.get('resource_arn'),
+                        "arn": resource_arn,
+                        "region": arn_info.get('region'),
                         "segment_id": segment.get('Id')
                     }
                     discovered.add(func_name)
@@ -132,16 +172,34 @@ def get_all_resources_from_trace(trace_id: str) -> str:
 
             # API Gateway detection
             elif 'AWS::ApiGateway' in origin or '/' in segment_name:
-                parts = segment_name.split('/')
-                if len(parts) >= 2:
-                    api_id = parts[0]
-                    stage = parts[1] if len(parts) > 1 else 'unknown'
+                api_id = None
+                stage = 'unknown'
+                resource_arn = segment_doc.get('resource_arn')
+                
+                # Try to extract from ARN first
+                if resource_arn and '/restapis/' in resource_arn:
+                    # arn:aws:apigateway:region::/restapis/api-id/stages/stage-name
+                    arn_parts = resource_arn.split('/')
+                    if len(arn_parts) >= 4:
+                        api_id = arn_parts[2]  # restapis/API_ID/stages/STAGE
+                        if len(arn_parts) >= 5:
+                            stage = arn_parts[4]
+                
+                # Fallback to segment name parsing
+                if not api_id and segment_name:
+                    parts = segment_name.split('/')
+                    if len(parts) >= 1:
+                        api_id = parts[0]
+                        stage = parts[1] if len(parts) > 1 else 'unknown'
+                
+                if api_id:
                     key = f"{api_id}:{stage}"
                     if key not in discovered:
                         resource = {
                             "type": "apigateway",
                             "name": api_id,
                             "stage": stage,
+                            "arn": resource_arn,
                             "segment_id": segment.get('Id')
                         }
                         discovered.add(key)

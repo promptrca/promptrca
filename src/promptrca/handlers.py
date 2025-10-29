@@ -28,7 +28,6 @@ from typing import Dict, Any, Optional
 from strands import Agent
 
 from .core import PromptRCAInvestigator
-from .agents.lead_orchestrator import LeadOrchestratorAgent
 from .utils.config import get_region, create_orchestrator_model
 from .utils import get_logger
 
@@ -69,6 +68,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
         # Check for free text input (primary method)
         if "free_text_input" in payload:
+            print(f"🔍 Debug: Taking free_text_input path")
             return _handle_free_text_investigation(
                 payload["free_text_input"],
                 region,
@@ -88,20 +88,31 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Fallback to legacy structured input
+        print(f"🔍 Debug: Taking legacy path")
         function_name = payload.get("function_name")
         xray_trace_id = payload.get("xray_trace_id")
         investigation_target = payload.get("investigation_target", {})
 
         # Initialize investigator
+        orchestrator_env = os.getenv('PROMPTRCA_ORCHESTRATOR', 'direct')
+        print(f"🔧 DEBUG: Environment PROMPTRCA_ORCHESTRATOR: {orchestrator_env}")
+        
         investigator = PromptRCAInvestigator(
             region=region,
             xray_trace_id=xray_trace_id,
             investigation_target=investigation_target,
             strands_agent=orchestrator_model
         )
+        
+        print(f"🎯 DEBUG: Investigator created with orchestrator: {investigator.orchestrator_type}")
 
         # Run investigation (async)
         report = asyncio.run(investigator.investigate(function_name=function_name))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Legacy handler received report type: {type(report)}")
+        print(f"🔍 Debug: Legacy handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Legacy handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()
@@ -128,20 +139,41 @@ def _handle_free_text_investigation(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle free text investigation using multi-agent orchestration."""
+    """Handle free text investigation using Swarm orchestration."""
+    print(f"🔍 Debug: _handle_free_text_investigation called with free_text: {free_text}")
+    
+    # Use Strands built-in tracing for the entire investigation
+    from strands.telemetry.tracer import get_tracer
+    strands_tracer = get_tracer()
+    
+    # Create task description for tracing
+    task_description = f"AWS Infrastructure Investigation: {free_text}"
+    
+    # Start Strands multiagent span for the entire investigation
+    investigation_span = strands_tracer.start_multiagent_span(
+        task=task_description,
+        instance="promptrca_investigation"
+    )
+    
     try:
-        from .agents.lead_orchestrator import LeadOrchestratorAgent
+        print(f"🔍 Debug: Starting SwarmOrchestrator import")
+        from .core.swarm_orchestrator import SwarmOrchestrator
 
-        # Initialize lead orchestrator agent
-        orchestrator = LeadOrchestratorAgent(strands_agent.model)
+        # Initialize Swarm orchestrator
+        orchestrator = SwarmOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "free_text_input": free_text
         }
 
-        # Run multi-agent investigation (async)
+        # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Handler received report type: {type(report)}")
+        print(f"🔍 Debug: Handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()
@@ -151,9 +183,20 @@ def _handle_free_text_investigation(
         response["investigation"]["input_type"] = "free_text"
         response["investigation"]["original_input"] = free_text
 
+        # End the span with successful result
+        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        strands_tracer.end_swarm_span(investigation_span, result=result_summary)
+
         return response
 
     except Exception as e:
+        print(f"🔍 Debug: Exception in _handle_free_text_investigation: {str(e)}")
+        import traceback
+        print(f"🔍 Debug: Traceback: {traceback.format_exc()}")
+        
+        # End the span with error
+        strands_tracer.end_span_with_error(investigation_span, f"Investigation failed: {str(e)}", e)
+        
         return {
             "success": False,
             "error": f"Multi-agent investigation failed: {str(e)}"
@@ -167,20 +210,38 @@ def _handle_investigation_inputs(
     assume_role_arn: Optional[str] = None,
     external_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Handle investigation_inputs using multi-agent orchestration."""
+    """Handle investigation_inputs using Swarm orchestration."""
+    # Use Strands built-in tracing for the entire investigation
+    from strands.telemetry.tracer import get_tracer
+    strands_tracer = get_tracer()
+    
+    # Create task description for tracing
+    task_description = f"AWS Infrastructure Investigation: {investigation_inputs}"
+    
+    # Start Strands multiagent span for the entire investigation
+    investigation_span = strands_tracer.start_multiagent_span(
+        task=task_description,
+        instance="promptrca_investigation"
+    )
+    
     try:
-        from .agents.lead_orchestrator import LeadOrchestratorAgent
+        from .core.swarm_orchestrator import SwarmOrchestrator
 
-        # Initialize lead orchestrator agent
-        orchestrator = LeadOrchestratorAgent(strands_agent.model)
+        # Initialize Swarm orchestrator
+        orchestrator = SwarmOrchestrator(region=region)
 
         # Prepare input for investigation
         inputs = {
             "investigation_inputs": investigation_inputs
         }
 
-        # Run multi-agent investigation (async)
+        # Run Swarm investigation (async) - this will run within the trace context
         report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        
+        # Debug: Check what type of object we received
+        print(f"🔍 Debug: Handler received report type: {type(report)}")
+        print(f"🔍 Debug: Handler report has to_dict: {hasattr(report, 'to_dict')}")
+        print(f"🔍 Debug: Handler report is dict: {isinstance(report, dict)}")
 
         # Convert to structured response
         response = report.to_dict()
@@ -190,9 +251,16 @@ def _handle_investigation_inputs(
         response["investigation"]["input_type"] = "investigation_inputs"
         response["investigation"]["original_input"] = investigation_inputs
 
+        # End the span with successful result
+        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        strands_tracer.end_swarm_span(investigation_span, result=result_summary)
+
         return response
 
     except Exception as e:
+        # End the span with error
+        strands_tracer.end_span_with_error(investigation_span, f"Investigation failed: {str(e)}", e)
+        
         return {
             "success": False,
             "error": f"Multi-agent investigation failed: {str(e)}"

@@ -24,7 +24,6 @@ from typing import List, Dict, Any, Optional
 import json
 
 from ..models.base import Fact, Hypothesis, RootCauseAnalysis
-from ..clients.aws_client import AWSClient
 from ..utils import get_logger
 
 logger = get_logger(__name__)
@@ -33,9 +32,12 @@ logger = get_logger(__name__)
 class RootCauseAgent:
     """Agent that identifies primary root cause from hypotheses."""
     
-    def __init__(self, aws_client: AWSClient, strands_agent=None):
-        """Initialize the root cause analysis agent."""
-        self.aws_client = aws_client
+    def __init__(self, strands_agent=None):
+        """
+        Initialize the root cause analysis agent.
+        
+        Note: Root cause analysis is purely analytical and doesn't require AWS API calls.
+        """
         self.strands_agent = strands_agent
     
     def analyze_root_cause(self, hypotheses: List[Hypothesis], facts: List[Fact]) -> RootCauseAnalysis:

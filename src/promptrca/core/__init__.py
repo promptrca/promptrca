@@ -21,5 +21,6 @@ Contact: christiangenn99+promptrca@gmail.com
 """
 
 from .investigator import PromptRCAInvestigator
+from .swarm_orchestrator import SwarmOrchestrator
 
-__all__ = ["PromptRCAInvestigator"]
+__all__ = ["PromptRCAInvestigator", "SwarmOrchestrator"]
