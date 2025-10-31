@@ -13,7 +13,7 @@ services:
       - PROMPTRCA_TEMPERATURE=${PROMPTRCA_TEMPERATURE:-0.7}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-promptrca-server}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
@@ -42,6 +42,51 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+
+  promptrca-lambda:
+    build:
+      context: .
+      dockerfile: Dockerfile.lambda
+    container_name: promptrca-lambda
+    environment:
+      - AWS_REGION=${AWS_REGION:-eu-west-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID:-openai.gpt-oss-120b-1:0}
+      - PROMPTRCA_TEMPERATURE=${PROMPTRCA_TEMPERATURE:-0.7}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-promptrca-lambda}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST}
+      # Swarm Orchestrator (Strands best practices, autonomous agent coordination)
+      - PROMPTRCA_ORCHESTRATOR=swarm
+      # Swarm Performance Configuration
+      - SWARM_MAX_HANDOFFS=${SWARM_MAX_HANDOFFS:-5}
+      - SWARM_MAX_ITERATIONS=${SWARM_MAX_ITERATIONS:-3}
+      - SWARM_EXECUTION_TIMEOUT=${SWARM_EXECUTION_TIMEOUT:-90.0}
+      - SWARM_NODE_TIMEOUT=${SWARM_NODE_TIMEOUT:-30.0}
+    ports:
+      - "9001:8080"  # Lambda RIE listens on port 8080 inside container
+    networks:
+      - promptrca-network
+    volumes:
+      - ./src/promptrca:/var/task/promptrca:ro  # Hot reloading for development
+    depends_on:
+      - langfuse-web
+    healthcheck:
+      # Lambda RIE doesn't have a simple health endpoint, so we check if the process is running
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q 'lambda-runtime-api' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M  # Lambda typically needs more memory
+          cpus: '1.0'
 
   # Langfuse observability stack (official v3 configuration)
   langfuse-worker:
