@@ -26,6 +26,18 @@ echo "Lambda Image: $DOCKERHUB_USERNAME/$LAMBDA_IMAGE:$VERSION"
 echo "Platforms: $PLATFORMS"
 echo ""
 
+# Ensure we have a multi-platform capable builder
+echo "🔧 Setting up multi-platform builder..."
+BUILDER_NAME="multiarch-builder"
+if ! docker buildx inspect $BUILDER_NAME >/dev/null 2>&1; then
+    echo "   Creating new builder: $BUILDER_NAME"
+    docker buildx create --name $BUILDER_NAME --driver docker-container --use
+fi
+docker buildx use $BUILDER_NAME
+docker buildx inspect --bootstrap >/dev/null 2>&1
+echo "✅ Builder ready for multi-platform builds"
+echo ""
+
 # Note: Make sure you're logged in to Docker Hub and AWS ECR
 echo "ℹ️  Make sure you're logged in to:"
 echo "   - Docker Hub (run 'docker login')"
