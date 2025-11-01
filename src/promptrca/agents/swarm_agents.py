@@ -19,7 +19,8 @@ from ..utils.config import (
     create_sqs_agent_model,
     create_sns_agent_model,
     create_hypothesis_agent_model,
-    create_root_cause_agent_model
+    create_root_cause_agent_model,
+    create_parser_model
 )
 from ..core.swarm_tools import (
     lambda_specialist_tool,
@@ -29,12 +30,32 @@ from ..core.swarm_tools import (
     iam_specialist_tool,
     s3_specialist_tool,
     sqs_specialist_tool,
-    sns_specialist_tool
+    sns_specialist_tool,
+    ExtractedIdentifiers
 )
+from ..tools.apigateway_tools import get_api_gateway_stage_config
 from ..utils.prompt_loader import load_prompt
 
 
 # Agent factory functions following Strands patterns
+
+def create_input_parser_agent() -> Agent:
+    """
+    Create input parser agent that extracts AWS identifiers from free text.
+    
+    This agent is the first node in the investigation graph. It extracts
+    resource names, ARNs, trace IDs, and execution ARNs from natural language input.
+    
+    Returns:
+        Agent configured for input parsing with structured output
+    """
+    return Agent(
+        name="input_parser",
+        model=create_parser_model(),
+        system_prompt="Extract AWS identifiers: trace IDs (1-xxx-xxx), ARNs (arn:aws:...), resource names, execution ARNs.",
+        structured_output_model=ExtractedIdentifiers
+    )
+
 
 def create_trace_agent() -> Agent:
     """
@@ -49,6 +70,7 @@ def create_trace_agent() -> Agent:
     """
     return Agent(
         name="trace_specialist",
+        description="Analyzes X-Ray traces to identify service interactions, errors, and performance issues. Entry point for investigations.",
         model=create_orchestrator_model(),
         system_prompt=load_prompt("trace_specialist"),
         tools=[trace_specialist_tool]
@@ -66,7 +88,8 @@ def create_lambda_agent() -> Agent:
         Agent configured for Lambda analysis with proper termination conditions
     """
     return Agent(
-        name="lambda_specialist", 
+        name="lambda_specialist",
+        description="Analyzes Lambda functions for errors, timeouts, memory issues, and IAM permission problems.",
         model=create_lambda_agent_model(),
         system_prompt=load_prompt("lambda_specialist"),
         tools=[lambda_specialist_tool]
@@ -85,6 +108,7 @@ def create_apigateway_agent() -> Agent:
     """
     return Agent(
         name="apigateway_specialist",
+        description="Analyzes API Gateway configurations, integration errors, authentication issues, and throttling problems.",
         model=create_apigateway_agent_model(),
         system_prompt=load_prompt("apigateway_specialist"),
         tools=[apigateway_specialist_tool]
@@ -103,6 +127,7 @@ def create_stepfunctions_agent() -> Agent:
     """
     return Agent(
         name="stepfunctions_specialist",
+        description="Analyzes Step Functions executions for state failures, timeouts, and IAM permission issues.",
         model=create_stepfunctions_agent_model(),
         system_prompt=load_prompt("stepfunctions_specialist"),
         tools=[stepfunctions_specialist_tool]
@@ -121,9 +146,10 @@ def create_iam_agent() -> Agent:
     """
     return Agent(
         name="iam_specialist",
+        description="Analyzes IAM roles, policies, and permissions. Essential for API Gateway → Lambda/Step Functions integration errors and AccessDenied issues.",
         model=create_iam_agent_model(),
         system_prompt=load_prompt("iam_specialist"),
-        tools=[iam_specialist_tool]
+        tools=[iam_specialist_tool, get_api_gateway_stage_config]
     )
 
 

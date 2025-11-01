@@ -47,7 +47,29 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     PromptRCA investigation entrypoint for AgentCore server.
     Uses shared handler logic from handlers.py
+    
+    Expects structured format:
+    {
+        "investigation": {
+            "input": "Free text description",
+            "xray_trace_id": "1-...",  # optional
+            "region": "eu-west-1"  # optional
+        },
+        "service_config": {
+            "role_arn": "arn:aws:iam::...",  # optional
+            "external_id": "...",  # optional
+            "region": "eu-west-1"  # optional
+        }
+    }
     """
+    # Validate structured format
+    if "investigation" not in payload or "service_config" not in payload:
+        return {
+            "success": False,
+            "error": "Payload must have 'investigation' and 'service_config' keys in structured format",
+            "received_keys": list(payload.keys())
+        }
+    
     result = handle_investigation(payload)
 
     # Add server-specific metadata

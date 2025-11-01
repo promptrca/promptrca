@@ -19,10 +19,12 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Union, Literal, TypedDict
 
-from strands import tool, ToolContext
+from pydantic import BaseModel, Field
+from strands import tool, ToolContext, Agent
 
 from ..models import Fact
 from ..context import set_aws_client, get_aws_client
+from ..utils.config import create_parser_model
 from ..specialists import (
     LambdaSpecialist, APIGatewaySpecialist, 
     StepFunctionsSpecialist, TraceSpecialist,
@@ -103,6 +105,27 @@ class AWSPermissionError(SpecialistToolError):
 class CrossAccountAccessError(SpecialistToolError):
     """Error during cross-account role assumption."""
     pass
+
+
+# Pydantic model for structured output from input parser agent
+class ExtractedIdentifiers(BaseModel):
+    """Structured output for AWS identifier extraction."""
+    resource_names: List[str] = Field(
+        default_factory=list,
+        description="List of AWS resource names (function names, API IDs, table names, etc.)"
+    )
+    arns: List[str] = Field(
+        default_factory=list,
+        description="List of full AWS ARNs"
+    )
+    trace_ids: List[str] = Field(
+        default_factory=list,
+        description="List of X-Ray trace IDs (format: 1-XXXXXXXX-XXXXXXXX)"
+    )
+    execution_arns: List[str] = Field(
+        default_factory=list,
+        description="List of Step Functions execution ARNs"
+    )
 
 
 # Configuration constants
