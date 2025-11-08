@@ -19,11 +19,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Contact: christiangenn99+promptrca@gmail.com
 
 Shared handler logic for PromptRCA investigations.
-Used by both the AgentCore server and AWS Lambda deployments.
+Used by both the HTTP server and AWS Lambda deployments.
 """
 
 import os
 import asyncio
+import re
 from typing import Dict, Any, Optional
 from strands import Agent
 
@@ -40,7 +41,7 @@ orchestrator_model = create_orchestrator_model()
 agent = Agent(model=orchestrator_model)
 
 
-def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Core investigation handler - shared between server and Lambda.
 
@@ -86,10 +87,15 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         # Determine region: investigation.region takes precedence over service_config.region
         region = investigation_region or service_region or get_region()
         
+        # Extract trace IDs from free text input (for better logging)
+        trace_id_pattern = r'(?:Root=)?(1-[a-f0-9]{8}-[a-f0-9]{24})'
+        extracted_trace_ids = re.findall(trace_id_pattern, free_text_input)
+        
         # Debug logging
         logger.info(f"🔍 [DEBUG] Investigation input: {free_text_input[:100]}...")
         logger.info(f"🔍 [DEBUG] Region: {region}")
-        logger.info(f"🔍 [DEBUG] X-Ray trace ID: {xray_trace_id or '(none)'}")
+        logger.info(f"🔍 [DEBUG] X-Ray trace ID (explicit): {xray_trace_id or '(none)'}")
+        logger.info(f"🔍 [DEBUG] X-Ray trace ID (extracted from text): {', '.join(extracted_trace_ids) if extracted_trace_ids else '(none)'}")
         logger.info(f"🔍 [DEBUG] Assume role ARN: {assume_role_arn or '(none)'}")
         logger.info(f"🔍 [DEBUG] External ID: {external_id or '(none)'}")
         
@@ -101,7 +107,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
         
         # Handle free text investigation
-        return _handle_free_text_investigation(
+        return await _handle_free_text_investigation(
             free_text_input,
             region,
             agent,
@@ -118,7 +124,7 @@ def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-def _handle_free_text_investigation(
+async def _handle_free_text_investigation(
     free_text: str,
     region: str,
     strands_agent: Agent,
@@ -155,8 +161,8 @@ def _handle_free_text_investigation(
             "xray_trace_id": xray_trace_id or ""
         }
 
-        # Run Swarm investigation (async) - this will run within the trace context
-        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        # Run Swarm investigation (async) - await since we're in an async context
+        report = await orchestrator.investigate(inputs, region, assume_role_arn, external_id)
         
         # Debug: Check what type of object we received
         print(f"🔍 Debug: Handler received report type: {type(report)}")
@@ -172,7 +178,9 @@ def _handle_free_text_investigation(
         response["investigation"]["original_input"] = free_text
 
         # End the span with successful result
-        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        facts_count = len(report.facts) if hasattr(report, 'facts') else 0
+        hypotheses_count = len(report.hypotheses) if hasattr(report, 'hypotheses') else 0
+        result_summary = f"Investigation completed successfully. Found {facts_count} facts and {hypotheses_count} hypotheses."
         strands_tracer.end_swarm_span(investigation_span, result=result_summary)
 
         return response
@@ -191,7 +199,7 @@ def _handle_free_text_investigation(
         }
 
 
-def _handle_investigation_inputs(
+async def _handle_investigation_inputs(
     investigation_inputs: str,
     region: str,
     strands_agent: Agent,
@@ -223,8 +231,8 @@ def _handle_investigation_inputs(
             "investigation_inputs": investigation_inputs
         }
 
-        # Run Swarm investigation (async) - this will run within the trace context
-        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        # Run Swarm investigation (async) - await since we're in an async context
+        report = await orchestrator.investigate(inputs, region, assume_role_arn, external_id)
         
         # Debug: Check what type of object we received
         print(f"🔍 Debug: Handler received report type: {type(report)}")

@@ -1,5 +1,4 @@
 # Core AI/ML dependencies
-bedrock-agentcore==1.0.5
 strands-agents==1.14.0
 
 # AWS SDK
@@ -62,7 +61,7 @@ colorama==0.4.6
 docstring-parser==0.17.0
 packaging>=23.2,<25.0
 
-# Web framework components (for AgentCore)
+# Web framework components (for HTTP server)
 starlette==0.48.0
 sse-starlette==3.0.2
 python-multipart==0.0.20

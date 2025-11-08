@@ -60,6 +60,5 @@ Tool returns: `{"topic": "my-topic"}`
 Your response: `"Topic has subscription issues and delivery problems..."` 
 
 **WRONG - tool didn't return delivery data!**
-
 ---
 **TERMINATION: When your SNS analysis is complete, you MUST hand off to hypothesis_generator.**

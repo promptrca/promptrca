@@ -18,174 +18,93 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Contact: christiangenn99+promptrca@gmail.com
 
-AWS Knowledge MCP Tools - Integration with AWS Knowledge MCP Server
-Provides access to official AWS documentation, best practices, and regional availability.
 """
 
 from strands import tool
-from typing import Dict, Any, Optional
-import json
-import asyncio
-import httpx
-from ..utils.config import get_mcp_config
-from ..utils import get_logger
-
-logger = get_logger(__name__)
-
-
-async def _call_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Call AWS Knowledge MCP Server tool.
-    
-    Args:
-        tool_name: Name of the MCP tool to call
-        arguments: Arguments to pass to the tool
-    
-    Returns:
-        Dict containing the response or error information
-    """
-    config = get_mcp_config()
-    
-    if not config["enabled"]:
-        return {"error": "AWS Knowledge MCP is disabled", "tool": tool_name}
-    
-    try:
-        async with httpx.AsyncClient(timeout=config["timeout"]) as client:
-            response = await client.post(
-                config["server_url"],
-                json={
-                    "method": "tools/call",
-                    "params": {
-                        "name": tool_name,
-                        "arguments": arguments
-                    }
-                }
-            )
-            
-            if response.status_code == 429:
-                # Rate limited
-                return {
-                    "error": "Rate limited by AWS Knowledge MCP server",
-                    "tool": tool_name,
-                    "retry_after": response.headers.get("Retry-After", "unknown")
-                }
-            elif response.status_code != 200:
-                return {
-                    "error": f"HTTP {response.status_code}: {response.text}",
-                    "tool": tool_name
-                }
-            
-            return response.json()
-            
-    except httpx.TimeoutException:
-        return {
-            "error": f"Timeout after {config['timeout']} seconds",
-            "tool": tool_name
-        }
-    except httpx.ConnectError:
-        return {
-            "error": "Unable to connect to AWS Knowledge MCP server",
-            "tool": tool_name
-        }
-    except Exception as e:
-        return {
-            "error": f"Unexpected error: {str(e)}",
-            "tool": tool_name
-        }
+from ..clients.mcp_client import get_mcp_client
 
 
 @tool
 def search_aws_documentation(query: str) -> str:
     """
-    Search AWS documentation for relevant information.
+    Search official AWS documentation for integration patterns, IAM permissions, and best practices.
+    
+    Use this to find:
+    - Required IAM permissions for service integrations
+    - Trust policy requirements
+    - Best practices for AWS service configurations
+    - Integration patterns between AWS services
+    - API parameters and error codes
     
     Args:
-        query: Search query for AWS documentation, blogs, best practices
+        query: Search query (e.g., "API Gateway invoke Step Functions IAM permissions")
     
     Returns:
-        JSON string with search results from AWS documentation
+        Formatted search results with documentation snippets and URLs
+        Returns "Documentation unavailable" on failure
+    
+    Example queries:
+        - "API Gateway invoke Step Functions permissions"
+        - "Lambda execution role DynamoDB access"
+        - "Step Functions IAM policy states:StartExecution"
     """
     try:
-        result = asyncio.run(_call_mcp_tool("search_documentation", {"query": query}))
-        return json.dumps(result, indent=2)
+        mcp_client = get_mcp_client()
+        results = mcp_client.search_documentation(query, max_results=5)
+        
+        if not results:
+            return "Documentation unavailable - AWS Knowledge MCP search returned no results"
+        
+        # Format results for agent consumption
+        formatted_results = []
+        formatted_results.append(f"AWS Documentation Search Results for: '{query}'\n")
+        formatted_results.append("=" * 80 + "\n")
+        
+        for idx, result in enumerate(results, 1):
+            text = result.get("text", "")
+            formatted_results.append(f"\n[Result {idx}]")
+            formatted_results.append(text)
+            formatted_results.append("\n" + "-" * 80)
+        
+        return "\n".join(formatted_results)
+        
     except Exception as e:
-        logger.error(f"Error in search_aws_documentation: {e}")
-        return json.dumps({"error": str(e), "query": query})
+        return f"Documentation unavailable - Error searching AWS Knowledge: {str(e)}"
 
 
 @tool
 def read_aws_documentation(url: str) -> str:
     """
-    Read and convert AWS documentation page to markdown.
+    Read full AWS documentation page as markdown.
+    
+    Use this to get detailed information from a specific AWS documentation URL
+    found via search_aws_documentation.
     
     Args:
-        url: URL of the AWS documentation page to read
+        url: AWS documentation URL (e.g., from search results)
     
     Returns:
-        JSON string with markdown content of the documentation page
+        Full documentation content as markdown
+        Returns "Documentation unavailable" on failure
+    
+    Example:
+        After searching and finding a relevant doc URL, use this to read the full content
+        for detailed IAM policy examples, API parameters, or configuration guides.
     """
     try:
-        result = asyncio.run(_call_mcp_tool("read_documentation", {"url": url}))
-        return json.dumps(result, indent=2)
+        mcp_client = get_mcp_client()
+        content = mcp_client.read_documentation(url)
+        
+        if not content:
+            return f"Documentation unavailable - Could not read content from {url}"
+        
+        # Format for agent consumption
+        formatted = []
+        formatted.append(f"AWS Documentation: {url}\n")
+        formatted.append("=" * 80 + "\n")
+        formatted.append(content)
+        
+        return "\n".join(formatted)
+        
     except Exception as e:
-        logger.error(f"Error in read_aws_documentation: {e}")
-        return json.dumps({"error": str(e), "url": url})
-
-
-@tool
-def get_aws_documentation_recommendations(topic: str) -> str:
-    """
-    Get content recommendations for AWS documentation pages.
-    
-    Args:
-        topic: Topic to get recommendations for
-    
-    Returns:
-        JSON string with recommended AWS documentation content
-    """
-    try:
-        result = asyncio.run(_call_mcp_tool("recommend", {"topic": topic}))
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        logger.error(f"Error in get_aws_documentation_recommendations: {e}")
-        return json.dumps({"error": str(e), "topic": topic})
-
-
-@tool
-def list_aws_regions() -> str:
-    """
-    Retrieve a list of all AWS regions, including their identifiers and names.
-    
-    Returns:
-        JSON string with list of AWS regions and their details
-    """
-    try:
-        result = asyncio.run(_call_mcp_tool("list_regions", {}))
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        logger.error(f"Error in list_aws_regions: {e}")
-        return json.dumps({"error": str(e)})
-
-
-@tool
-def get_service_regional_availability(service: str, region: str = None) -> str:
-    """
-    Retrieve AWS regional availability information for SDK service APIs and CloudFormation resources.
-    
-    Args:
-        service: AWS service name (e.g., 'lambda', 'dynamodb', 's3')
-        region: AWS region to check (optional, checks all regions if not provided)
-    
-    Returns:
-        JSON string with regional availability information for the service
-    """
-    try:
-        arguments = {"service": service}
-        if region:
-            arguments["region"] = region
-            
-        result = asyncio.run(_call_mcp_tool("get_regional_availability", arguments))
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        logger.error(f"Error in get_service_regional_availability: {e}")
-        return json.dumps({"error": str(e), "service": service, "region": region})
+        return f"Documentation unavailable - Error reading AWS documentation: {str(e)}"

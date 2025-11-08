@@ -420,6 +420,25 @@ def get_mcp_config() -> Dict[str, Any]:
     }
 
 
+def get_aws_knowledge_mcp_config() -> Dict[str, Any]:
+    """
+    Get AWS Knowledge MCP configuration from environment.
+    
+    Environment Variables:
+    - AWS_KNOWLEDGE_MCP_URL: MCP server URL (default: https://knowledge-mcp.global.api.aws)
+    - AWS_KNOWLEDGE_MCP_ENABLED: Enable/disable MCP integration (default: true)
+    - AWS_KNOWLEDGE_MCP_TIMEOUT: Request timeout in seconds (default: 30)
+    
+    Returns:
+        Dict[str, Any]: Configuration dictionary with url, enabled, timeout
+    """
+    return {
+        "url": os.getenv("AWS_KNOWLEDGE_MCP_URL", "https://knowledge-mcp.global.api.aws"),
+        "enabled": os.getenv("AWS_KNOWLEDGE_MCP_ENABLED", "true").lower() == "true",
+        "timeout": int(os.getenv("AWS_KNOWLEDGE_MCP_TIMEOUT", "30"))
+    }
+
+
 def get_environment_info() -> Dict[str, str]:
     """
     Get information about current environment configuration.

@@ -34,6 +34,7 @@ from ..core.swarm_tools import (
     ExtractedIdentifiers
 )
 from ..tools.apigateway_tools import get_api_gateway_stage_config
+from ..tools.aws_knowledge_tools import search_aws_documentation, read_aws_documentation
 from ..utils.prompt_loader import load_prompt
 
 
@@ -92,7 +93,7 @@ def create_lambda_agent() -> Agent:
         description="Analyzes Lambda functions for errors, timeouts, memory issues, and IAM permission problems.",
         model=create_lambda_agent_model(),
         system_prompt=load_prompt("lambda_specialist"),
-        tools=[lambda_specialist_tool]
+        tools=[lambda_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -111,7 +112,7 @@ def create_apigateway_agent() -> Agent:
         description="Analyzes API Gateway configurations, integration errors, authentication issues, and throttling problems.",
         model=create_apigateway_agent_model(),
         system_prompt=load_prompt("apigateway_specialist"),
-        tools=[apigateway_specialist_tool]
+        tools=[apigateway_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -130,7 +131,7 @@ def create_stepfunctions_agent() -> Agent:
         description="Analyzes Step Functions executions for state failures, timeouts, and IAM permission issues.",
         model=create_stepfunctions_agent_model(),
         system_prompt=load_prompt("stepfunctions_specialist"),
-        tools=[stepfunctions_specialist_tool]
+        tools=[stepfunctions_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -149,7 +150,7 @@ def create_iam_agent() -> Agent:
         description="Analyzes IAM roles, policies, and permissions. Essential for API Gateway → Lambda/Step Functions integration errors and AccessDenied issues.",
         model=create_iam_agent_model(),
         system_prompt=load_prompt("iam_specialist"),
-        tools=[iam_specialist_tool, get_api_gateway_stage_config]
+        tools=[iam_specialist_tool, get_api_gateway_stage_config, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -165,9 +166,10 @@ def create_s3_agent() -> Agent:
     """
     return Agent(
         name="s3_specialist",
+        description="Analyzes S3 buckets, policies, and access patterns to identify storage and access issues.",
         model=create_s3_agent_model(),
         system_prompt=load_prompt("s3_specialist"),
-        tools=[s3_specialist_tool]
+        tools=[s3_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -183,9 +185,10 @@ def create_sqs_agent() -> Agent:
     """
     return Agent(
         name="sqs_specialist",
+        description="Analyzes SQS queues, message processing, and integration patterns to identify message delivery issues.",
         model=create_sqs_agent_model(),
         system_prompt=load_prompt("sqs_specialist"),
-        tools=[sqs_specialist_tool]
+        tools=[sqs_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -201,9 +204,10 @@ def create_sns_agent() -> Agent:
     """
     return Agent(
         name="sns_specialist",
+        description="Analyzes SNS topics, subscriptions, and message delivery patterns to identify notification delivery issues.",
         model=create_sns_agent_model(),
         system_prompt=load_prompt("sns_specialist"),
-        tools=[sns_specialist_tool]
+        tools=[sns_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 

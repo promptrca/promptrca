@@ -50,6 +50,7 @@ Example events:
 """
 
 import json
+import asyncio
 from typing import Dict, Any
 
 from .handlers import handle_investigation
@@ -75,8 +76,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Parse payload based on event source
     payload = _parse_event(event)
 
-    # Run investigation using shared handler
-    result = handle_investigation(payload)
+    # Run investigation using shared handler (async, so use asyncio.run at Lambda level)
+    result = asyncio.run(handle_investigation(payload))
 
     # Add Lambda-specific metadata
     if "investigation" in result:

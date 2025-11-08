@@ -19,33 +19,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Contact: christiangenn99+promptrca@gmail.com
 
 PromptRCA HTTP Server - AI Root-Cause Investigator
-HTTP server implementation using Amazon Bedrock AgentCore
+HTTP server implementation using Starlette
 """
 
 import argparse
 import os
-import asyncio
-import base64
+import json
 from typing import Dict, Any
 
 # IMPORTANT: Initialize telemetry BEFORE any imports
 from .utils.config import setup_strands_telemetry
 setup_strands_telemetry()
 
-from bedrock_agentcore import BedrockAgentCoreApp
+from starlette.applications import Starlette
 from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from .handlers import handle_investigation, get_region
 from .utils.config import get_environment_info, DEFAULT_REGION
 
-# AgentCore setup
-app = BedrockAgentCoreApp()
 
-
-@app.entrypoint
-def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def invoke(request):
     """
-    PromptRCA investigation entrypoint for AgentCore server.
+    PromptRCA investigation entrypoint for HTTP server.
     Uses shared handler logic from handlers.py
     
     Expects structured format:
@@ -62,21 +58,30 @@ def invoke(payload: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
     """
+    try:
+        # Parse JSON payload from request body
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({
+            "success": False,
+            "error": "Invalid JSON in request body"
+        }, status_code=400)
+    
     # Validate structured format
     if "investigation" not in payload or "service_config" not in payload:
-        return {
+        return JSONResponse({
             "success": False,
             "error": "Payload must have 'investigation' and 'service_config' keys in structured format",
             "received_keys": list(payload.keys())
-        }
+        }, status_code=400)
     
-    result = handle_investigation(payload)
+    result = await handle_investigation(payload)
 
     # Add server-specific metadata
     if "investigation" in result:
-        result["investigation"]["execution_environment"] = "agentcore_server"
+        result["investigation"]["execution_environment"] = "http_server"
 
-    return result
+    return JSONResponse(result)
 
 
 # Health check endpoint
@@ -84,11 +89,9 @@ async def health(request):
     """Health check endpoint - simple status check."""
     return JSONResponse({
         "status": "healthy",
-        "service": "promptrca-agentcore",
+        "service": "promptrca-server",
         "version": "1.0.0"
     })
-
-app.add_route("/health", health, methods=["GET"])
 
 
 # Status endpoint
@@ -101,7 +104,7 @@ async def status(request):
         
         return JSONResponse({
             "status": "healthy",
-            "service": "promptrca-agentcore",
+            "service": "promptrca-server",
             "version": "1.0.0",
             "environment": env_info,
             "endpoints": {
@@ -117,7 +120,20 @@ async def status(request):
             "error": str(e)
         }, status_code=500)
 
-app.add_route("/status", status, methods=["GET"])
+
+# Ping endpoint for health checks
+async def ping(request):
+    """Ping endpoint for health checks."""
+    return JSONResponse({"status": "ok"})
+
+
+# Create Starlette application with routes
+app = Starlette(routes=[
+    Route("/invocations", invoke, methods=["POST"]),
+    Route("/health", health, methods=["GET"]),
+    Route("/status", status, methods=["GET"]),
+    Route("/ping", ping, methods=["GET"]),
+])
 
 
 def main():
@@ -137,6 +153,9 @@ def main():
     parser.add_argument("--reload",
                        action="store_true",
                        help="Enable hot reloading for development")
+    parser.add_argument("--host",
+                       default="0.0.0.0",
+                       help="Host to bind to (default: 0.0.0.0)")
     
     args = parser.parse_args()
     
@@ -147,33 +166,39 @@ def main():
     print("🔍 PromptRCA - AI Root-Cause Investigator (HTTP Server)")
     print("=====================================================")
     print(f"🌍 AWS Region: {get_region()}")
-    print(f"🌐 Starting AgentCore server on http://localhost:{args.port}")
+    print(f"🌐 Starting HTTP server on http://{args.host}:{args.port}")
     print("")
-    print("📝 Free Text Input (Recommended):")
+    print("📝 Investigation Request (Structured Format):")
     print("curl -X POST http://localhost:8080/invocations \\")
     print("  -H 'Content-Type: application/json' \\")
-    print("  -d '{\"free_text_input\": \"My Lambda function payment-processor is failing with division by zero errors. X-Ray trace: 1-68e904af-484b173354fff9607ee41871\"}'")
+    print("  -d '{\"investigation\": {\"input\": \"My Lambda function payment-processor is failing with division by zero errors. X-Ray trace: 1-68e904af-484b173354fff9607ee41871\"}, \"service_config\": {}}'")
     print("")
-    print("🔧 Legacy Structured Input:")
+    print("🔧 Structured Input Example:")
     print("curl -X POST http://localhost:8080/invocations \\")
     print("  -H 'Content-Type: application/json' \\")
-    print(f"  -d '{{\"function_name\": \"test-function\", \"region\": \"{get_region()}\"}}'")
+    print(f"  -d '{{\"investigation\": {{\"input\": \"test\", \"region\": \"{get_region()}\"}}, \"service_config\": {{\"region\": \"{get_region()}\"}}}}'")
     print("")
     print("🏥 Health Check:")
     print("curl http://localhost:8080/health")
     print("")
     print("📊 Status Check:")
     print("curl http://localhost:8080/status")
+    print("")
+    print("🏓 Ping:")
+    print("curl http://localhost:8080/ping")
     print("=====================================================")
     
+    # Always use uvicorn (both for development and production)
+    import uvicorn
     if args.reload:
-        # Use uvicorn with hot reloading for development
-        import uvicorn
         print("🔄 Hot reloading enabled - server will restart on code changes")
-        uvicorn.run("promptrca.server:app", host="0.0.0.0", port=args.port, reload=True)
-    else:
-        # Use AgentCore's built-in server for production
-        app.run(port=args.port)
+    
+    uvicorn.run(
+        "promptrca.server:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload
+    )
 
 
 if __name__ == "__main__":
