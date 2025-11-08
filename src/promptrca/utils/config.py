@@ -16,7 +16,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Contact: christiangenn99+promptrca@gmail.com
+Contact: info@promptrca.com
 
 Centralized configuration utilities for PromptRCA.
 Handles environment variable parsing and provides consistent defaults.
@@ -417,6 +417,25 @@ def get_mcp_config() -> Dict[str, Any]:
         "server_url": os.getenv("AWS_KNOWLEDGE_MCP_URL", "https://knowledge-mcp.global.api.aws"),
         "timeout": int(os.getenv("AWS_KNOWLEDGE_MCP_TIMEOUT", "5")),
         "max_retries": int(os.getenv("AWS_KNOWLEDGE_MCP_RETRIES", "2"))
+    }
+
+
+def get_aws_knowledge_mcp_config() -> Dict[str, Any]:
+    """
+    Get AWS Knowledge MCP configuration from environment.
+    
+    Environment Variables:
+    - AWS_KNOWLEDGE_MCP_URL: MCP server URL (default: https://knowledge-mcp.global.api.aws)
+    - AWS_KNOWLEDGE_MCP_ENABLED: Enable/disable MCP integration (default: true)
+    - AWS_KNOWLEDGE_MCP_TIMEOUT: Request timeout in seconds (default: 30)
+    
+    Returns:
+        Dict[str, Any]: Configuration dictionary with url, enabled, timeout
+    """
+    return {
+        "url": os.getenv("AWS_KNOWLEDGE_MCP_URL", "https://knowledge-mcp.global.api.aws"),
+        "enabled": os.getenv("AWS_KNOWLEDGE_MCP_ENABLED", "true").lower() == "true",
+        "timeout": int(os.getenv("AWS_KNOWLEDGE_MCP_TIMEOUT", "30"))
     }
 
 

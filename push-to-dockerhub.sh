@@ -41,7 +41,7 @@ echo ""
 # Note: Make sure you're logged in to Docker Hub and AWS ECR
 echo "ℹ️  Make sure you're logged in to:"
 echo "   - Docker Hub (run 'docker login')"
-echo "   - AWS ECR (run 'aws-vault exec personal --no-session -- aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws')"
+echo "   - AWS ECR (run 'aws-vault exec promptrca --no-session -- aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws')"
 echo ""
 
 # Build and push Server image (multi-platform)

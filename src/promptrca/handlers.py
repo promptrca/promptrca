@@ -16,14 +16,15 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Contact: christiangenn99+promptrca@gmail.com
+Contact: info@promptrca.com
 
 Shared handler logic for PromptRCA investigations.
-Used by both the AgentCore server and AWS Lambda deployments.
+Used by both the HTTP server and AWS Lambda deployments.
 """
 
 import os
 import asyncio
+import re
 from typing import Dict, Any, Optional
 from strands import Agent
 
@@ -40,104 +41,96 @@ orchestrator_model = create_orchestrator_model()
 agent = Agent(model=orchestrator_model)
 
 
-def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def handle_investigation(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Core investigation handler - shared between server and Lambda.
 
     Args:
-        payload: Investigation request with one of:
-            - free_text_input: Natural language description
-            - investigation_inputs: Natural language description (new format)
-            - function_name: Lambda function name (legacy)
-            - investigation_target: Structured target specification
-            - assume_role_arn: Optional IAM role ARN to assume for cross-account access
+        payload: Investigation request in structured format:
+            {
+                "investigation": {
+                    "input": "Free text description",
+                    "xray_trace_id": "1-...",  # optional, defaults to empty string
+                    "region": "eu-west-1"  # optional, uses service_config.region if not provided
+                },
+                "service_config": {
+                    "role_arn": "arn:aws:iam::...",  # optional
+                    "external_id": "...",  # optional
+                    "region": "eu-west-1"  # tenant default region
+                }
+            }
 
     Returns:
         Investigation report as dictionary
     """
     try:
-        # Extract parameters from payload
-        region = payload.get("region", get_region())
-        assume_role_arn = payload.get("assume_role_arn")
-        external_id = payload.get("external_id")
+        # Validate structured format
+        if "investigation" not in payload:
+            return {
+                "success": False,
+                "error": "Missing required 'investigation' key in payload"
+            }
         
-        # Debug logging for role assumption
-        logger.info(f"🔍 [DEBUG] Extracted assume_role_arn: {assume_role_arn}")
-        logger.info(f"🔍 [DEBUG] Extracted external_id: {external_id}")
-        logger.info(f"🔍 [DEBUG] Full payload keys: {list(payload.keys())}")
-
-        # Check for free text input (primary method)
-        if "free_text_input" in payload:
-            print(f"🔍 Debug: Taking free_text_input path")
-            return _handle_free_text_investigation(
-                payload["free_text_input"],
-                region,
-                agent,
-                assume_role_arn,
-                external_id
-            )
-
-        # Check for new investigation_inputs format
-        if "investigation_inputs" in payload:
-            return _handle_investigation_inputs(
-                payload["investigation_inputs"],
-                region,
-                agent,
-                assume_role_arn,
-                external_id
-            )
-
-        # Fallback to legacy structured input
-        print(f"🔍 Debug: Taking legacy path")
-        function_name = payload.get("function_name")
-        xray_trace_id = payload.get("xray_trace_id")
-        investigation_target = payload.get("investigation_target", {})
-
-        # Initialize investigator
-        orchestrator_env = os.getenv('PROMPTRCA_ORCHESTRATOR', 'direct')
-        print(f"🔧 DEBUG: Environment PROMPTRCA_ORCHESTRATOR: {orchestrator_env}")
+        investigation = payload.get("investigation", {})
+        service_config = payload.get("service_config", {})
         
-        investigator = PromptRCAInvestigator(
-            region=region,
-            xray_trace_id=xray_trace_id,
-            investigation_target=investigation_target,
-            strands_agent=orchestrator_model
+        # Extract investigation data
+        free_text_input = investigation.get("input", "")
+        xray_trace_id = investigation.get("xray_trace_id", "")
+        investigation_region = investigation.get("region")
+        
+        # Extract service configuration
+        assume_role_arn = service_config.get("role_arn")
+        external_id = service_config.get("external_id")
+        service_region = service_config.get("region")
+        
+        # Determine region: investigation.region takes precedence over service_config.region
+        region = investigation_region or service_region or get_region()
+        
+        # Extract trace IDs from free text input (for better logging)
+        trace_id_pattern = r'(?:Root=)?(1-[a-f0-9]{8}-[a-f0-9]{24})'
+        extracted_trace_ids = re.findall(trace_id_pattern, free_text_input)
+        
+        # Debug logging
+        logger.info(f"🔍 [DEBUG] Investigation input: {free_text_input[:100]}...")
+        logger.info(f"🔍 [DEBUG] Region: {region}")
+        logger.info(f"🔍 [DEBUG] X-Ray trace ID (explicit): {xray_trace_id or '(none)'}")
+        logger.info(f"🔍 [DEBUG] X-Ray trace ID (extracted from text): {', '.join(extracted_trace_ids) if extracted_trace_ids else '(none)'}")
+        logger.info(f"🔍 [DEBUG] Assume role ARN: {assume_role_arn or '(none)'}")
+        logger.info(f"🔍 [DEBUG] External ID: {external_id or '(none)'}")
+        
+        # Validate required fields
+        if not free_text_input:
+            return {
+                "success": False,
+                "error": "Missing required 'investigation.input' field"
+            }
+        
+        # Handle free text investigation
+        return await _handle_free_text_investigation(
+            free_text_input,
+            region,
+            agent,
+            assume_role_arn,
+            external_id,
+            xray_trace_id
         )
-        
-        print(f"🎯 DEBUG: Investigator created with orchestrator: {investigator.orchestrator_type}")
-
-        # Run investigation (async)
-        report = asyncio.run(investigator.investigate(function_name=function_name))
-        
-        # Debug: Check what type of object we received
-        print(f"🔍 Debug: Legacy handler received report type: {type(report)}")
-        print(f"🔍 Debug: Legacy handler report has to_dict: {hasattr(report, 'to_dict')}")
-        print(f"🔍 Debug: Legacy handler report is dict: {isinstance(report, dict)}")
-
-        # Convert to structured response
-        response = report.to_dict()
-
-
-        # Add investigation metadata
-        response["investigation"]["region"] = region
-        response["investigation"]["investigation_target"] = investigation_target
-        response["investigation"]["xray_trace_id"] = xray_trace_id
-
-        return response
 
     except Exception as e:
+        logger.error(f"Error in handle_investigation: {str(e)}", exc_info=True)
         return {
             "success": False,
             "error": str(e)
         }
 
 
-def _handle_free_text_investigation(
+async def _handle_free_text_investigation(
     free_text: str,
     region: str,
     strands_agent: Agent,
     assume_role_arn: Optional[str] = None,
-    external_id: Optional[str] = None
+    external_id: Optional[str] = None,
+    xray_trace_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """Handle free text investigation using Swarm orchestration."""
     print(f"🔍 Debug: _handle_free_text_investigation called with free_text: {free_text}")
@@ -164,11 +157,12 @@ def _handle_free_text_investigation(
 
         # Prepare input for investigation
         inputs = {
-            "free_text_input": free_text
+            "free_text_input": free_text,
+            "xray_trace_id": xray_trace_id or ""
         }
 
-        # Run Swarm investigation (async) - this will run within the trace context
-        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        # Run Swarm investigation (async) - await since we're in an async context
+        report = await orchestrator.investigate(inputs, region, assume_role_arn, external_id)
         
         # Debug: Check what type of object we received
         print(f"🔍 Debug: Handler received report type: {type(report)}")
@@ -184,7 +178,9 @@ def _handle_free_text_investigation(
         response["investigation"]["original_input"] = free_text
 
         # End the span with successful result
-        result_summary = f"Investigation completed successfully. Found {len(report.facts)} facts and {len(report.hypotheses)} hypotheses."
+        facts_count = len(report.facts) if hasattr(report, 'facts') else 0
+        hypotheses_count = len(report.hypotheses) if hasattr(report, 'hypotheses') else 0
+        result_summary = f"Investigation completed successfully. Found {facts_count} facts and {hypotheses_count} hypotheses."
         strands_tracer.end_swarm_span(investigation_span, result=result_summary)
 
         return response
@@ -203,7 +199,7 @@ def _handle_free_text_investigation(
         }
 
 
-def _handle_investigation_inputs(
+async def _handle_investigation_inputs(
     investigation_inputs: str,
     region: str,
     strands_agent: Agent,
@@ -235,8 +231,8 @@ def _handle_investigation_inputs(
             "investigation_inputs": investigation_inputs
         }
 
-        # Run Swarm investigation (async) - this will run within the trace context
-        report = asyncio.run(orchestrator.investigate(inputs, region, assume_role_arn, external_id))
+        # Run Swarm investigation (async) - await since we're in an async context
+        report = await orchestrator.investigate(inputs, region, assume_role_arn, external_id)
         
         # Debug: Check what type of object we received
         print(f"🔍 Debug: Handler received report type: {type(report)}")

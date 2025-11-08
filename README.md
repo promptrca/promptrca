@@ -67,12 +67,12 @@ The docker-compose setup includes three services:
 - **Dockerfile**: `Dockerfile.server` (optimized for HTTP server)
 - **Base Image**: `python:3.13-slim`
 - **Port**: `8080`
-- **Purpose**: Standalone HTTP server using AgentCore
+- **Purpose**: Standalone HTTP server using Starlette
 - **Endpoints**:
   - `POST /invocations` - Investigation requests
   - `GET /health` - Health check
   - `GET /status` - Detailed status
-  - `GET /ping` - Built-in AgentCore ping
+  - `GET /ping` - Ping endpoint for health checks
 
 ### 2. PromptRCA Lambda (`promptrca-lambda`)
 - **Dockerfile**: `Dockerfile` (AWS Lambda runtime)

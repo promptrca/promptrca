@@ -12,6 +12,23 @@ Key Features:
 - Handles AWS client context from invocation_state for cross-account access
 - Delegates to existing specialist classes that use real AWS tools
 - Structured error handling with meaningful error messages
+
+Copyright (C) 2025 Christian Gennaro Faraone
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Contact: info@promptrca.com
 """
 
 import asyncio
@@ -19,10 +36,12 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Union, Literal, TypedDict
 
-from strands import tool, ToolContext
+from pydantic import BaseModel, Field
+from strands import tool, ToolContext, Agent
 
 from ..models import Fact
 from ..context import set_aws_client, get_aws_client
+from ..utils.config import create_parser_model
 from ..specialists import (
     LambdaSpecialist, APIGatewaySpecialist, 
     StepFunctionsSpecialist, TraceSpecialist,
@@ -103,6 +122,27 @@ class AWSPermissionError(SpecialistToolError):
 class CrossAccountAccessError(SpecialistToolError):
     """Error during cross-account role assumption."""
     pass
+
+
+# Pydantic model for structured output from input parser agent
+class ExtractedIdentifiers(BaseModel):
+    """Structured output for AWS identifier extraction."""
+    resource_names: List[str] = Field(
+        default_factory=list,
+        description="List of AWS resource names (function names, API IDs, table names, etc.)"
+    )
+    arns: List[str] = Field(
+        default_factory=list,
+        description="List of full AWS ARNs"
+    )
+    trace_ids: List[str] = Field(
+        default_factory=list,
+        description="List of X-Ray trace IDs (format: 1-XXXXXXXX-XXXXXXXX)"
+    )
+    execution_arns: List[str] = Field(
+        default_factory=list,
+        description="List of Step Functions execution ARNs"
+    )
 
 
 # Configuration constants

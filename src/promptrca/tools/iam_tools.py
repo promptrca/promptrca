@@ -16,7 +16,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Contact: christiangenn99+promptrca@gmail.com
+Contact: info@promptrca.com
 
 """
 
@@ -132,7 +132,7 @@ def get_iam_policy_document(policy_arn: str) -> str:
 
 
 @tool
-def simulate_iam_policy(simulate: str) -> str:
+def simulate_iam_policy(policy_document: str, action: str, resource: str = "*") -> str:
     """
     Simulate IAM policy to check if an action is allowed.
     

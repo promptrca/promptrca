@@ -10,6 +10,23 @@ Key Benefits:
 - Agents decide investigation flow autonomously
 - Shared context across all specialists
 - Tool-Agent pattern for modularity
+
+Copyright (C) 2025 Christian Gennaro Faraone
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Contact: info@promptrca.com
 """
 
 import json
@@ -29,7 +46,7 @@ from ..clients import AWSClient
 from ..context import set_aws_client, clear_aws_client
 from ..utils.config import get_region
 from ..utils import get_logger
-from ..agents.swarm_agents import create_specialist_swarm_agents, create_hypothesis_agent_standalone, create_root_cause_agent_standalone, create_swarm_agents
+from ..agents.swarm_agents import create_specialist_swarm_agents, create_hypothesis_agent_standalone, create_root_cause_agent_standalone, create_swarm_agents, create_input_parser_agent
 from ..specialists import InvestigationContext
 from .swarm_tools import (
     # Re-export resource type constants for backward compatibility
@@ -304,7 +321,10 @@ class SwarmOrchestrator:
                 self.root_cause_agent = agent
     
     def _create_investigation_graph(self):
-        """Create investigation graph with Swarm + post-processing nodes."""
+        """Create investigation graph with Input Parser + Swarm + post-processing nodes."""
+        
+        # Create input parser agent (FIRST NODE)
+        input_parser_agent = create_input_parser_agent()
         
         # Create specialist swarm (without hypothesis/root_cause agents)
         specialist_agents = create_specialist_swarm_agents()
@@ -332,16 +352,18 @@ class SwarmOrchestrator:
         
         # Build the graph
         builder = GraphBuilder()
+        builder.add_node(input_parser_agent, "input_parser")
         builder.add_node(specialist_swarm, "investigation")
         builder.add_node(hypothesis_agent, "hypothesis_generation")
         builder.add_node(report_generator, "report_generation")
         
         # Define edges (deterministic flow)
+        builder.add_edge("input_parser", "investigation")
         builder.add_edge("investigation", "hypothesis_generation")
         builder.add_edge("hypothesis_generation", "report_generation")
         
-        # Set entry point
-        builder.set_entry_point("investigation")
+        # Set entry point to input_parser (FIRST NODE)
+        builder.set_entry_point("input_parser")
         
         # Set timeouts
         builder.set_execution_timeout(600.0)  # 10 minutes total
@@ -402,50 +424,26 @@ class SwarmOrchestrator:
                 logger.error(f"❌ AWS client setup failed: {e}")
                 return self._generate_aws_client_error_report(str(e), investigation_start_time)
             
-            # Parse inputs
-            logger.info("📝 Step 1: Parsing inputs...")
-            parsed_inputs = self._parse_inputs(inputs, region)
-            logger.info(f"   ✓ Parsed {len(parsed_inputs.primary_targets)} targets, "
-                       f"{len(parsed_inputs.trace_ids)} traces")
+            # Extract free text input or structured input
+            if 'free_text_input' in inputs:
+                free_text_input = inputs['free_text_input']
+                logger.info("📝 Starting investigation with free text input (will be parsed by input_parser agent)")
+            elif 'investigation_inputs' in inputs:
+                # Already structured - pass through
+                free_text_input = json.dumps(inputs['investigation_inputs'])
+                logger.info("📝 Starting investigation with structured input")
+            else:
+                # Legacy format - convert to free text
+                free_text_input = str(inputs)
+                logger.info("📝 Starting investigation with legacy format input")
             
-            # Discover resources
-            logger.info("🔍 Step 2: Discovering resources...")
-            resources = await self._discover_resources(parsed_inputs)
-            logger.info(f"   ✓ Discovered {len(resources)} resources")
-            
-            # Estimate investigation cost
-            estimated_cost = self._estimate_investigation_cost(resources, self.investigation_progress)
-            logger.info(f"💰 Step 2.5: Estimated investigation cost: ${estimated_cost:.2f}")
-            
-            # Check if cost estimate exceeds limits
-            if estimated_cost > self.cost_control_config.max_cost_estimate:
-                logger.warning(f"⚠️ Estimated cost (${estimated_cost:.2f}) exceeds limit (${self.cost_control_config.max_cost_estimate:.2f})")
-                if self.cost_control_config.early_termination_enabled:
-                    return self._generate_cost_limit_report(estimated_cost, investigation_start_time, resources)
-            
-            # Prepare investigation context for swarm (make it JSON serializable)
+            # Prepare investigation context for graph (make it JSON serializable)
             investigation_context = {
-                "trace_ids": parsed_inputs.trace_ids,
-                "region": region,
-                "parsed_inputs": {
-                    "trace_ids": parsed_inputs.trace_ids,
-                    "primary_targets": [
-                        {
-                            "type": target.type,
-                            "name": target.name,
-                            "arn": target.arn,
-                            "region": target.region,
-                            "metadata": target.metadata
-                        }
-                        for target in parsed_inputs.primary_targets
-                    ]
-                }
+                "region": region
             }
             
-            # Create investigation prompt for swarm
-            investigation_prompt = self._create_investigation_prompt(
-                resources, parsed_inputs, investigation_context
-            )
+            # Pass raw input - input_parser will extract, swarm will investigate
+            investigation_prompt = f"Investigate this AWS issue: {free_text_input}"
             
             # Execute graph investigation with proper context sharing
             logger.info("🤖 Step 3: Executing graph investigation...")
@@ -459,10 +457,8 @@ class SwarmOrchestrator:
                     investigation_prompt,
                     invocation_state={
                         "aws_client": aws_client,
-                        "resources": resources,
                         "investigation_context": investigation_context,
                         "region": region,
-                        "trace_ids": parsed_inputs.trace_ids,
                         "investigation_id": investigation_id,
                         "investigation_start_time": investigation_start_time,
                         "debug_mode": os.getenv('DEBUG_MODE', False)
@@ -481,7 +477,7 @@ class SwarmOrchestrator:
                         else:
                             # Fallback if nested extraction failed
                             report = self._create_fallback_report(
-                                investigation_id, investigation_start_time, region, resources, 
+                                investigation_id, investigation_start_time, region, 
                                 "Failed to extract report from nested MultiAgentResult"
                             )
                     else:
@@ -490,7 +486,7 @@ class SwarmOrchestrator:
                 else:
                     # Fallback if report generation failed
                     report = self._create_fallback_report(
-                        investigation_id, investigation_start_time, region, resources, 
+                        investigation_id, investigation_start_time, region, 
                         "Report generation node did not return results"
                     )
                 
@@ -498,7 +494,7 @@ class SwarmOrchestrator:
                 logger.error(f"Graph execution failed: {e}")
                 # Create fallback report
                 report = self._create_fallback_report(
-                    investigation_id, investigation_start_time, region, resources, str(e)
+                    investigation_id, investigation_start_time, region, str(e)
                 )
             
             # Cost control metadata removed - OpenTelemetry handles observability
@@ -527,35 +523,21 @@ class SwarmOrchestrator:
             clear_aws_client()
     
     def _parse_inputs(self, inputs: Dict[str, Any], region: str):
-        """Parse investigation inputs using existing parser."""
-        logger.debug(f"[DEBUG] _parse_inputs received: {json.dumps(inputs, default=str)}")
+        """
+        Parse investigation inputs - DEPRECATED.
         
-        # Use existing input parser logic
+        This method is kept for backward compatibility but is no longer used.
+        Input parsing is now handled by the input_parser agent node in the graph.
+        """
+        logger.warning("_parse_inputs() is deprecated - input parsing is now handled by input_parser agent node")
+        
+        # Minimal implementation for backward compatibility
         if 'investigation_inputs' in inputs:
-            logger.debug("[DEBUG] Using investigation_inputs (structured path)")
             return self.input_parser.parse_inputs(inputs['investigation_inputs'], region)
-        
-        # Handle legacy formats
-        structured: Dict[str, Any] = {}
-        if 'xray_trace_id' in inputs:
-            structured['trace_ids'] = [inputs['xray_trace_id']]
-        if 'function_name' in inputs:
-            structured['primary_targets'] = [{"type": "lambda", "name": inputs['function_name'], "region": region}]
-        if 'investigation_target' in inputs:
-            t = inputs['investigation_target']
-            structured.setdefault('primary_targets', []).append({
-                "type": t.get('type'), "name": t.get('name'), "region": t.get('region', region), "metadata": t.get('metadata', {})
-            })
-        if structured:
-            logger.debug("[DEBUG] Converted legacy/direct format to structured")
-            return self.input_parser.parse_inputs(structured, region)
-        
-        if 'free_text_input' in inputs:
-            logger.debug("[DEBUG] Using free_text_input")
+        elif 'free_text_input' in inputs:
             return self.input_parser.parse_inputs(inputs['free_text_input'], region)
-        
-        # Default: treat dict as structured
-        return self.input_parser.parse_inputs(inputs, region)
+        else:
+            return self.input_parser.parse_inputs(inputs, region)
     
     async def _discover_resources(self, parsed_inputs) -> List[Dict[str, Any]]:
         """Discover AWS resources from inputs and traces."""
@@ -775,9 +757,10 @@ Investigation MUST end with root_cause_analyzer providing final analysis. Do not
         
         # If no meaningful findings extracted, create basic summary
         if not facts:
+            agent_count = len(swarm_result.results) if hasattr(swarm_result, 'results') else 0
             facts.append(Fact(
                 source="swarm_orchestrator",
-                content=f"Investigated {len(resources)} AWS resources across {len(swarm_result.results) if hasattr(swarm_result, 'results') else 0} specialist agents",
+                content=f"Investigated AWS infrastructure across {agent_count} specialist agents",
                 confidence=0.90
             ))
         
@@ -1552,7 +1535,6 @@ Next Steps:
         investigation_id: str,
         start_time: datetime,
         region: str,
-        resources: List[Dict[str, Any]],
         error: str
     ) -> InvestigationReport:
         """Create fallback InvestigationReport when graph execution fails."""
@@ -1569,7 +1551,7 @@ Next Steps:
             severity_assessment=SeverityAssessment(
                 severity="unknown",
                 impact_scope="unknown",
-                affected_resource_count=len(resources),
+                affected_resource_count=0,
                 user_impact="unknown",
                 confidence=0.0,
                 reasoning=f"Graph execution failed: {error}"

@@ -64,6 +64,5 @@ handoff_to_agent(agent_name="hypothesis_generator", message="S3 bucket security 
 - Using JSON format instead of function calling
 - Not calling handoff_to_agent() at all
 - Making assumptions about data not returned by the tool
-
 ---
 **TERMINATION: When your S3 analysis is complete, you MUST call handoff_to_agent() to transfer to hypothesis_generator.**

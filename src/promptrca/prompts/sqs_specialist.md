@@ -60,6 +60,5 @@ Tool returns: `{"queue": "my-queue"}`
 Your response: `"Queue has message processing delays and Lambda integration issues..."` 
 
 **WRONG - tool didn't return processing data!**
-
 ---
 **TERMINATION: When your SQS analysis is complete, you MUST hand off to hypothesis_generator.**

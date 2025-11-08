@@ -4,6 +4,23 @@ Trace Specialist for PromptRCA
 
 Analyzes AWS X-Ray traces to extract service interactions, timing information,
 and error patterns across distributed systems.
+
+Copyright (C) 2025 Christian Gennaro Faraone
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Contact: info@promptrca.com
 """
 
 import json
@@ -189,40 +206,121 @@ class TraceSpecialist(BaseSpecialist):
         facts = []
         subsegments = segment.get('subsegments', [])
         
+        # Extract AWS metadata from parent segment (like API Gateway role, account, etc.)
+        aws_metadata = segment.get('aws', {})
+        parent_account_id = aws_metadata.get('account_id')
+        parent_resource_arn = segment.get('resource_arn')
+        
+        # Check for API Gateway metadata in parent segment
+        if 'api_gateway' in aws_metadata or segment.get('origin') == 'AWS::ApiGateway::Stage':
+            api_gateway_data = aws_metadata.get('api_gateway', {}) or segment.get('http', {})
+            api_id = api_gateway_data.get('api_id') or api_gateway_data.get('request_id', '')
+            
+            if parent_account_id:
+                # Construct likely execution role ARN for API Gateway
+                # API Gateway typically uses a role named ApiGatewayExecutionRole or similar
+                facts.append(self._create_fact(
+                    source='xray_trace',
+                    content=f"API Gateway in account {parent_account_id} made downstream calls",
+                    confidence=0.9,
+                    metadata={
+                        'trace_id': trace_id,
+                        'account_id': parent_account_id,
+                        'api_id': api_id if api_id else 'unknown',
+                        'requires_iam_check': True,
+                        'resource_type': 'apigateway'
+                    }
+                ))
+        
         for subsegment in subsegments:
             subsegment_name = subsegment.get('name', 'unknown')
             
-            # Check for Step Functions calls specifically
-            if subsegment_name == 'STEPFUNCTIONS':
-                http_req = subsegment.get('http', {}).get('request', {})
-                if 'StartSyncExecution' in http_req.get('url', ''):
+            # Check for AWS service calls and extract actual findings
+            http_req = subsegment.get('http', {}).get('request', {})
+            http_url = http_req.get('url', '')
+            
+            # Extract AWS metadata from subsegment
+            sub_aws_metadata = subsegment.get('aws', {})
+            
+            # Record service interaction (generic)
+            if http_url:
+                # Build metadata with AWS context
+                call_metadata = {
+                    'trace_id': trace_id, 
+                    'subsegment': subsegment_name, 
+                    'url': http_url
+                }
+                
+                # Add AWS-specific metadata if available
+                if sub_aws_metadata:
+                    if 'account_id' in sub_aws_metadata:
+                        call_metadata['account_id'] = sub_aws_metadata['account_id']
+                    if 'operation' in sub_aws_metadata:
+                        call_metadata['operation'] = sub_aws_metadata['operation']
+                    if 'region' in sub_aws_metadata:
+                        call_metadata['region'] = sub_aws_metadata['region']
+                
+                facts.append(self._create_fact(
+                    source='xray_trace',
+                    content=f"Service call to {subsegment_name}: {http_url}",
+                    confidence=0.9,
+                    metadata=call_metadata
+                ))
+                
+                # Check response status
+                sub_http_status = subsegment.get('http', {}).get('response', {}).get('status')
+                if sub_http_status:
+                    status_metadata = {
+                        'trace_id': trace_id, 
+                        'http_status': sub_http_status, 
+                        'subsegment': subsegment_name
+                    }
+                    
+                    # Flag potential IAM issues for AWS service integrations with HTTP 200
+                    # This is common when API Gateway calls Step Functions/Lambda without proper permissions
+                    if sub_http_status == 200 and ('states' in http_url.lower() or 'lambda' in http_url.lower()):
+                        status_metadata['requires_iam_check'] = True
+                        status_metadata['integration_type'] = 'aws_service'
+                        if parent_account_id:
+                            status_metadata['caller_account'] = parent_account_id
+                    
                     facts.append(self._create_fact(
                         source='xray_trace',
-                        content=f"API Gateway invoked Step Functions StartSyncExecution",
-                        confidence=0.95,
-                        metadata={'trace_id': trace_id, 'service_call': 'stepfunctions', 'action': 'StartSyncExecution'}
+                        content=f"{subsegment_name} returned HTTP {sub_http_status}",
+                        confidence=0.9,
+                        metadata=status_metadata
                     ))
-                    
-                    # Check response status
-                    sub_http_status = subsegment.get('http', {}).get('response', {}).get('status')
-                    if sub_http_status:
-                        facts.append(self._create_fact(
-                            source='xray_trace',
-                            content=f"Step Functions call returned HTTP {sub_http_status}",
-                            confidence=0.9,
-                            metadata={'trace_id': trace_id, 'http_status': sub_http_status}
-                        ))
             
             # Check for errors in subsegments
             if subsegment.get('fault') or subsegment.get('error'):
                 if subsegment.get('cause'):
                     sub_cause = subsegment.get('cause', {})
                     sub_message = sub_cause.get('message', 'Unknown subsegment error')
-                    facts.append(self._create_fact(
-                        source='xray_trace',
-                        content=f"Subsegment {subsegment_name} error: {sub_message}",
-                        confidence=0.95,
-                        metadata={'trace_id': trace_id, 'subsegment': subsegment_name, 'error_message': sub_message}
-                    ))
+                    
+                    # Check for specific IAM/permission error patterns
+                    is_permission_error = any(keyword in sub_message.lower() for keyword in [
+                        'accessdenied', 'unauthorized', 'forbidden', 
+                        'permission', 'not authorized', 'insufficient'
+                    ])
+                    
+                    if is_permission_error:
+                        facts.append(self._create_fact(
+                            source='xray_trace',
+                            content=f"IAM Permission Error in {subsegment_name}: {sub_message}",
+                            confidence=0.98,
+                            metadata={
+                                'trace_id': trace_id,
+                                'subsegment': subsegment_name,
+                                'error_type': 'iam_permission',
+                                'error_message': sub_message
+                            }
+                        ))
+                    else:
+                        facts.append(self._create_fact(
+                            source='xray_trace',
+                            content=f"Subsegment {subsegment_name} error: {sub_message}",
+                            confidence=0.95,
+                            metadata={'trace_id': trace_id, 'subsegment': subsegment_name, 'error_message': sub_message}
+                        ))
         
         return facts

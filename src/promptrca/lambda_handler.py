@@ -16,7 +16,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-Contact: christiangenn99+promptrca@gmail.com
+Contact: info@promptrca.com
 
 AWS Lambda handler for PromptRCA investigations.
 
@@ -50,6 +50,7 @@ Example events:
 """
 
 import json
+import asyncio
 from typing import Dict, Any
 
 from .handlers import handle_investigation
@@ -75,8 +76,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Parse payload based on event source
     payload = _parse_event(event)
 
-    # Run investigation using shared handler
-    result = handle_investigation(payload)
+    # Run investigation using shared handler (async, so use asyncio.run at Lambda level)
+    result = asyncio.run(handle_investigation(payload))
 
     # Add Lambda-specific metadata
     if "investigation" in result:
@@ -96,40 +97,78 @@ def _parse_event(event: Dict[str, Any]) -> Dict[str, Any]:
     """
     Parse Lambda event to extract investigation payload.
 
+    Expects structured format:
+    {
+        "investigation": {
+            "input": "...",
+            "xray_trace_id": "...",  # optional
+            "region": "..."  # optional
+        },
+        "service_config": {
+            "role_arn": "...",  # optional
+            "external_id": "...",  # optional
+            "region": "..."  # optional
+        }
+    }
+
     Supports multiple event sources:
-    - Direct invocation: event is the payload
-    - API Gateway: extract from body
-    - EventBridge: extract from detail
-    - SNS: extract from message
-    - SQS: extract from body
+    - Step Functions: Pass through structured payload directly
+    - API Gateway: Extract structured format from body
+    - EventBridge: Extract structured format from detail
+    - SNS: Extract structured format from message
+    - SQS: Extract structured format from body
+    - Direct invocation: Validate structured format
     """
+    # Step Functions payload - should already be in structured format
+    if "investigation" in event and "service_config" in event:
+        return event
+    
     # API Gateway (HTTP API or REST API)
     if "body" in event and "requestContext" in event:
         try:
-            return json.loads(event["body"])
-        except (json.JSONDecodeError, TypeError):
-            return {"error": "Invalid JSON in request body"}
+            body = json.loads(event["body"]) if isinstance(event["body"], str) else event["body"]
+            if "investigation" in body and "service_config" in body:
+                return body
+            return {"error": "Payload must have 'investigation' and 'service_config' keys"}
+        except (json.JSONDecodeError, TypeError) as e:
+            return {"error": f"Invalid JSON in request body: {str(e)}"}
 
     # EventBridge
     if "detail" in event and "source" in event:
-        return event["detail"]
+        detail = event["detail"]
+        if "investigation" in detail and "service_config" in detail:
+            return detail
+        return {"error": "EventBridge detail must have 'investigation' and 'service_config' keys"}
 
     # SNS
     if "Records" in event and event["Records"][0].get("EventSource") == "aws:sns":
         try:
-            return json.loads(event["Records"][0]["Sns"]["Message"])
-        except (json.JSONDecodeError, KeyError):
-            return {"error": "Invalid SNS message"}
+            message = json.loads(event["Records"][0]["Sns"]["Message"])
+            if "investigation" in message and "service_config" in message:
+                return message
+            return {"error": "SNS message must have 'investigation' and 'service_config' keys"}
+        except (json.JSONDecodeError, KeyError) as e:
+            return {"error": f"Invalid SNS message: {str(e)}"}
 
     # SQS
     if "Records" in event and event["Records"][0].get("eventSource") == "aws:sqs":
         try:
-            return json.loads(event["Records"][0]["body"])
-        except (json.JSONDecodeError, KeyError):
-            return {"error": "Invalid SQS message"}
+            body = json.loads(event["Records"][0]["body"])
+            if "investigation" in body and "service_config" in body:
+                return body
+            return {"error": "SQS message must have 'investigation' and 'service_config' keys"}
+        except (json.JSONDecodeError, KeyError) as e:
+            return {"error": f"Invalid SQS message: {str(e)}"}
 
-    # Direct invocation - event is the payload
-    return event
+    # Direct invocation - validate structured format
+    if "investigation" in event and "service_config" in event:
+        return event
+    
+    # If we get here, the payload doesn't have the expected structure
+    return {
+        "error": "Payload must have 'investigation' and 'service_config' keys in structured format",
+        "received_keys": list(event.keys())
+    }
 
 
 def _format_response(event: Dict[str, Any], result: Dict[str, Any]) -> Dict[str, Any]:
