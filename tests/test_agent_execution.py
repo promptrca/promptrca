@@ -60,10 +60,10 @@ class TestTraceAgentExecution:
             mock_specialist_class.return_value = mock_specialist
             
             # Create swarm with agent
-            swarm = Swarm(agents=[trace_agent])
+            swarm = Swarm([trace_agent])
             
-            # Execute agent
-            result = await swarm.run(
+            # Execute agent (Swarm is callable)
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -181,8 +181,8 @@ class TestLambdaAgentExecution:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 2)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -208,8 +208,8 @@ class TestLambdaAgentExecution:
             ]
             mock_run_analysis.return_value = facts
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -231,7 +231,7 @@ class TestLambdaAgentExecution:
             # Make specialist creation fail
             mock_specialist_class.side_effect = Exception("Function not found")
             
-            swarm = Swarm(agents=[lambda_agent])
+            swarm = Swarm([lambda_agent])
             
             try:
                 result = await swarm.run(
@@ -269,7 +269,7 @@ class TestAPIGatewayAgentExecution:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("apigateway_specialist", 2)
             
-            swarm = Swarm(agents=[apigateway_agent])
+            swarm = Swarm([apigateway_agent])
             result = await swarm.run(
                 query,
                 invocation_state=mock_tool_context.invocation_state
@@ -289,10 +289,10 @@ class TestAPIGatewayAgentExecution:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("apigateway_specialist", 1)
             
-            swarm = Swarm(agents=[apigateway_agent])
+            swarm = Swarm([apigateway_agent])
             start_time = time.time()
             
-            result = await swarm.run(
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -328,8 +328,8 @@ class TestStepFunctionsAgentExecution:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("stepfunctions_specialist", 2)
             
-            swarm = Swarm(agents=[stepfunctions_agent])
-            result = await swarm.run(
+            swarm = Swarm([stepfunctions_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -347,8 +347,8 @@ class TestStepFunctionsAgentExecution:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("stepfunctions_specialist", 1)
             
-            swarm = Swarm(agents=[stepfunctions_agent])
-            result = await swarm.run(
+            swarm = Swarm([stepfunctions_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -368,7 +368,7 @@ class TestStepFunctionsAgentExecution:
             
             mock_specialist_class.side_effect = Exception("Invalid execution ARN")
             
-            swarm = Swarm(agents=[stepfunctions_agent])
+            swarm = Swarm([stepfunctions_agent])
             
             try:
                 result = await swarm.run(

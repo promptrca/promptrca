@@ -57,8 +57,8 @@ class TestAgentMetricsCollection:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -86,10 +86,10 @@ class TestAgentMetricsCollection:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
+            swarm = Swarm([trace_agent])
             start_time = time.time()
             
-            result = await swarm.run(
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -116,8 +116,8 @@ class TestAgentMetricsCollection:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -146,8 +146,8 @@ class TestAgentMetricsCollection:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -245,8 +245,8 @@ class TestToolMetrics:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -269,8 +269,8 @@ class TestToolMetrics:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("apigateway_specialist", 1)
             
-            swarm = Swarm(agents=[apigateway_agent])
-            result = await swarm.run(
+            swarm = Swarm([apigateway_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -297,10 +297,10 @@ class TestToolMetrics:
             
             mock_run_analysis.side_effect = slow_analysis
             
-            swarm = Swarm(agents=[stepfunctions_agent])
+            swarm = Swarm([stepfunctions_agent])
             start_time = time.time()
             
-            result = await swarm.run(
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -341,10 +341,10 @@ class TestPerformanceBenchmarks:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
+            swarm = Swarm([trace_agent])
             start_time = time.time()
             
-            result = await swarm.run(
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -366,8 +366,8 @@ class TestPerformanceBenchmarks:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -393,8 +393,8 @@ class TestPerformanceBenchmarks:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )

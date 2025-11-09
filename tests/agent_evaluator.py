@@ -62,8 +62,8 @@ class AgentMetrics:
 
 
 @dataclass
-class TestCase:
-    """Represents a single test case."""
+class AgentTestCase:
+    """Represents a single test case for agent evaluation."""
     id: str
     query: str
     category: str
@@ -71,6 +71,10 @@ class TestCase:
     expected_tool: Optional[str] = None
     expected_content: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+# Alias for backward compatibility
+TestCase = AgentTestCase
 
 
 @dataclass
@@ -118,7 +122,7 @@ class AgentEvaluator:
                             If None, test cases must be loaded separately.
         """
         self.test_cases_path = test_cases_path
-        self.test_cases: List[TestCase] = []
+        self.test_cases: List[AgentTestCase] = []
         self.results: List[EvaluationResult] = []
         
         if test_cases_path:
@@ -134,7 +138,7 @@ class AgentEvaluator:
             data = json.load(f)
         
         self.test_cases = [
-            TestCase(**case) for case in data
+            AgentTestCase(**case) for case in data
         ]
     
     def _extract_metrics(self, result: Any) -> AgentMetrics:
@@ -189,7 +193,7 @@ class AgentEvaluator:
         self,
         agent: Agent,
         agent_name: str,
-        test_cases: Optional[List[TestCase]] = None,
+        test_cases: Optional[List[AgentTestCase]] = None,
         mock_tool_context: Optional[Any] = None
     ) -> List[EvaluationResult]:
         """
@@ -219,14 +223,14 @@ class AgentEvaluator:
                 # Execute agent with test query
                 if mock_tool_context:
                     # For testing, we'll use a Swarm with the agent
-                    swarm = Swarm(agents=[agent])
-                    result = await swarm.run(
+                    swarm = Swarm([agent])
+                    result = await swarm(
                         test_case.query,
                         invocation_state={"aws_client": mock_tool_context.invocation_state.get("aws_client")} if mock_tool_context else {}
                     )
                 else:
-                    swarm = Swarm(agents=[agent])
-                    result = await swarm.run(test_case.query)
+                    swarm = Swarm([agent])
+                    result = await swarm(test_case.query)
                 
                 response_time = time.time() - start_time
                 
@@ -392,10 +396,10 @@ class AgentEvaluator:
         
         return comparison
     
-    def evaluate_tool_usage(
+    async def evaluate_tool_usage(
         self,
         agent: Agent,
-        tool_test_cases: List[TestCase],
+        tool_test_cases: List[AgentTestCase],
         mock_tool_context: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
@@ -409,9 +413,7 @@ class AgentEvaluator:
         Returns:
             Tool usage accuracy metrics
         """
-        results = asyncio.run(
-            self.evaluate_agent(agent, agent.name, tool_test_cases, mock_tool_context)
-        )
+        results = await self.evaluate_agent(agent, agent.name, tool_test_cases, mock_tool_context)
         
         correct_selections = sum(
             1 for r in results 

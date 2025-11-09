@@ -54,8 +54,8 @@ class TestTraceAgentToolUsage:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -77,8 +77,8 @@ class TestTraceAgentToolUsage:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -100,8 +100,8 @@ class TestTraceAgentToolUsage:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            swarm = Swarm(agents=[trace_agent])
-            result = await swarm.run(
+            swarm = Swarm([trace_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -135,8 +135,8 @@ class TestLambdaAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 2)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -155,8 +155,8 @@ class TestLambdaAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -175,8 +175,8 @@ class TestLambdaAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -198,8 +198,8 @@ class TestLambdaAgentToolUsage:
             mock_run_analysis.return_value = create_mock_specialist_facts("lambda_specialist", 1)
             mock_search_docs.return_value = "AWS Lambda timeout documentation"
             
-            swarm = Swarm(agents=[lambda_agent])
-            result = await swarm.run(
+            swarm = Swarm([lambda_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -232,8 +232,8 @@ class TestAPIGatewayAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("apigateway_specialist", 2)
             
-            swarm = Swarm(agents=[apigateway_agent])
-            result = await swarm.run(
+            swarm = Swarm([apigateway_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -252,8 +252,8 @@ class TestAPIGatewayAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("apigateway_specialist", 1)
             
-            swarm = Swarm(agents=[apigateway_agent])
-            result = await swarm.run(
+            swarm = Swarm([apigateway_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -272,7 +272,7 @@ class TestAPIGatewayAgentToolUsage:
             # Make specialist creation fail
             mock_specialist_class.side_effect = Exception("API Gateway not found")
             
-            swarm = Swarm(agents=[apigateway_agent])
+            swarm = Swarm([apigateway_agent])
             
             try:
                 result = await swarm.run(
@@ -310,8 +310,8 @@ class TestStepFunctionsAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("stepfunctions_specialist", 2)
             
-            swarm = Swarm(agents=[stepfunctions_agent])
-            result = await swarm.run(
+            swarm = Swarm([stepfunctions_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -330,8 +330,8 @@ class TestStepFunctionsAgentToolUsage:
             
             mock_run_analysis.return_value = create_mock_specialist_facts("stepfunctions_specialist", 1)
             
-            swarm = Swarm(agents=[stepfunctions_agent])
-            result = await swarm.run(
+            swarm = Swarm([stepfunctions_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )
@@ -352,8 +352,8 @@ class TestStepFunctionsAgentToolUsage:
             mock_run_analysis.return_value = create_mock_specialist_facts("stepfunctions_specialist", 1)
             mock_search_docs.return_value = "Step Functions best practices"
             
-            swarm = Swarm(agents=[stepfunctions_agent])
-            result = await swarm.run(
+            swarm = Swarm([stepfunctions_agent])
+            result = await swarm(
                 query,
                 invocation_state=mock_tool_context.invocation_state
             )

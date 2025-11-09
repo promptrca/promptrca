@@ -25,7 +25,8 @@ from src.promptrca.agents.swarm_agents import (
 )
 from tests.agent_evaluator import (
     AgentEvaluator,
-    TestCase,
+    AgentTestCase,
+    TestCase,  # Alias for backward compatibility
     EvaluationResult,
     AgentMetrics
 )
@@ -41,7 +42,7 @@ class TestTestCaseLoading:
         evaluator = AgentEvaluator(test_cases_path=test_cases_path)
         
         assert len(evaluator.test_cases) > 0
-        assert all(isinstance(tc, TestCase) for tc in evaluator.test_cases)
+        assert all(isinstance(tc, AgentTestCase) for tc in evaluator.test_cases)
     
     def test_load_test_cases_invalid_path(self):
         """Test loading test cases with invalid path raises error."""
@@ -157,7 +158,7 @@ class TestEvaluationExecutionFlow:
         from unittest.mock import patch
         
         # Create a test case that will cause an error
-        error_test_case = TestCase(
+        error_test_case = AgentTestCase(
             id="error-test",
             query="Invalid query that causes error",
             category="edge_cases",
@@ -469,7 +470,7 @@ class TestToolUsageEvaluation:
         from unittest.mock import patch
         
         tool_test_cases = [
-            TestCase(
+            AgentTestCase(
                 id="tool-test-1",
                 query="Analyze trace 1-67890123-abcdef1234567890abcdef12",
                 expected_tool="trace_specialist_tool",
@@ -488,7 +489,7 @@ class TestToolUsageEvaluation:
             mock_specialist.analyze_trace = mock_analyze_trace
             mock_specialist_class.return_value = mock_specialist
             
-            tool_usage_result = evaluator.evaluate_tool_usage(
+            tool_usage_result = await evaluator.evaluate_tool_usage(
                 trace_agent,
                 tool_test_cases,
                 mock_tool_context
