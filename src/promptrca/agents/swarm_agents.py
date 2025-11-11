@@ -317,14 +317,42 @@ def create_specialist_swarm_agents() -> List[Agent]:
 def create_hypothesis_agent_standalone() -> Agent:
     """
     Create the hypothesis generator agent (used outside swarm).
-    
+
     This agent analyzes findings from specialist agents and generates
     structured hypotheses about root causes. Used as a standalone Graph node.
-    
+
     Returns:
         Agent configured for hypothesis generation
     """
     return create_hypothesis_agent()
+
+
+def create_root_cause_agent_standalone() -> Agent:
+    """
+    Create the root cause analyzer agent (used as Graph node).
+
+    This agent evaluates hypotheses from hypothesis_generator and identifies
+    the primary root cause with supporting evidence. Used as a standalone Graph node.
+
+    Returns:
+        Agent configured for root cause analysis
+    """
+    return Agent(
+        name="root_cause_analyzer",
+        description=(
+            "Analyzes hypotheses and identifies the primary root cause with "
+            "supporting evidence. Evaluates confidence, distinguishes root causes "
+            "from symptoms, and provides structured root cause analysis."
+        ),
+        model=create_root_cause_agent_model(),
+        system_prompt=load_prompt("root_cause_analyzer"),
+        tools=[],  # No tools needed - analyzes hypotheses
+        trace_attributes={
+            "service.name": "promptrca-rootcause-agent",
+            "service.version": "1.0.0",
+            "agent.type": "root_cause_analyzer"
+        }
+    )
 
 
 def create_root_cause_agent_standalone() -> Agent:

@@ -172,7 +172,13 @@ Begin investigation immediately upon receiving issue description."""
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_sns_topic_config, get_sns_topic_metrics, get_sns_subscriptions, list_sns_topics]
+        tools=[get_sns_topic_config, get_sns_topic_metrics, get_sns_subscriptions, list_sns_topics],
+        trace_attributes={
+            "service.name": "promptrca-sns-agent",
+            "service.version": "1.0.0",
+            "agent.type": "sns_specialist",
+            "aws.service": "sns"
+        }
     )
 
 

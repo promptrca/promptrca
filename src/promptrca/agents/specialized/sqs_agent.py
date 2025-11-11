@@ -167,7 +167,13 @@ Begin investigation immediately upon receiving issue description."""
     return Agent(
         model=model,
         system_prompt=system_prompt,
-        tools=[get_sqs_queue_config, get_sqs_queue_metrics, get_sqs_dead_letter_queue, list_sqs_queues]
+        tools=[get_sqs_queue_config, get_sqs_queue_metrics, get_sqs_dead_letter_queue, list_sqs_queues],
+        trace_attributes={
+            "service.name": "promptrca-sqs-agent",
+            "service.version": "1.0.0",
+            "agent.type": "sqs_specialist",
+            "aws.service": "sqs"
+        }
     )
 
 
