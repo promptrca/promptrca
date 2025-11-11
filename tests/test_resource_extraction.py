@@ -34,7 +34,7 @@ class TestResourceExtraction:
                             "Id": "segment-1",
                             "Document": json.dumps({
                                 "id": "segment-1",
-                                "name": "sherlock-test-test-api/test",
+                                "name": "promptrca-test-test-api/test",
                                 "origin": "AWS::ApiGateway::Stage",
                                 "resource_arn": "arn:aws:apigateway:eu-west-1::/restapis/142gh05m9a/stages/test",
                                 "subsegments": [

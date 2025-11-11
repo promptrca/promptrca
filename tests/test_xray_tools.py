@@ -95,7 +95,7 @@ class TestXRayToolsWithErrorTrace:
                             "Id": "7d3bfe9640ace210",
                             "Document": json.dumps({
                                 "id": "7d3bfe9640ace210",
-                                "name": "sherlock-test-test-api",
+                                "name": "promptrca-test-test-api",
                                 "start_time": 1.760961232443E9,
                                 "trace_id": "1-68f622d0-2cfc080243ee63df62fc57a8",
                                 "end_time": 1.760961232497E9,
@@ -108,7 +108,7 @@ class TestXRayToolsWithErrorTrace:
                                 },
                                 "cause": {
                                     "id": "permission-error-123",
-                                    "message": "User: arn:aws:sts::840181656986:assumed-role/sherlock-test-test-api-role/sherlock-test-test-api is not authorized to perform: states:StartSyncExecution on resource: arn:aws:states:eu-west-1:840181656986:stateMachine:sherlock-test-test-statemachine with an explicit deny in an identity-based policy"
+                                    "message": "User: arn:aws:sts::840181656986:assumed-role/promptrca-test-test-api-role/promptrca-test-test-api is not authorized to perform: states:StartSyncExecution on resource: arn:aws:states:eu-west-1:840181656986:stateMachine:promptrca-test-test-statemachine with an explicit deny in an identity-based policy"
                                 },
                                 "subsegments": []
                             })
@@ -149,7 +149,7 @@ class TestXRayToolsWithErrorTrace:
             assert "not authorized to perform" in permission_facts[0].content
             
             # Should have fault/error summary facts
-            fault_facts = [f for f in facts if "sherlock-test-test-api" in f.content and ("fault" in f.content.lower() or "error" in f.content.lower())]
+            fault_facts = [f for f in facts if "promptrca-test-test-api" in f.content and ("fault" in f.content.lower() or "error" in f.content.lower())]
             assert len(fault_facts) >= 1
 
 

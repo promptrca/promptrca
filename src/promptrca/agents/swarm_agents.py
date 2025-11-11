@@ -69,8 +69,13 @@ def create_input_parser_agent() -> Agent:
     """
     return Agent(
         name="input_parser",
+        description=(
+            "Extracts AWS identifiers (trace IDs, ARNs, resource names, execution ARNs) "
+            "from natural language input. First node in investigation pipeline. "
+            "Always hands off to trace_specialist after parsing."
+        ),
         model=create_parser_model(),
-        system_prompt="Extract AWS identifiers: trace IDs (1-xxx-xxx), ARNs (arn:aws:...), resource names, execution ARNs.",
+        system_prompt=load_prompt("input_parser"),
         structured_output_model=ExtractedIdentifiers
     )
 
@@ -241,6 +246,12 @@ def create_hypothesis_agent() -> Agent:
     """
     return Agent(
         name="hypothesis_generator",
+        description=(
+            "Analyzes structured facts from specialist agents and generates "
+            "evidence-based hypotheses about root causes. Receives investigation "
+            "findings and produces ranked hypotheses with confidence scores. "
+            "Always hands off to root_cause_analyzer after generating hypotheses."
+        ),
         model=create_hypothesis_agent_model(),
         system_prompt=load_prompt("hypothesis_generator"),
         tools=[]  # No tools needed - receives findings from other agents
@@ -259,7 +270,12 @@ def create_root_cause_agent() -> Agent:
         Agent configured for final root cause analysis (terminal)
     """
     return Agent(
-        name="root_cause_analyzer", 
+        name="root_cause_analyzer",
+        description=(
+            "Final analysis agent that evaluates hypotheses and determines the "
+            "most likely root cause. Provides structured root cause analysis "
+            "with remediation advice. This is a terminal agent - no handoffs allowed."
+        ),
         model=create_root_cause_agent_model(),
         system_prompt=load_prompt("root_cause_analyzer"),
         tools=[]  # No tools needed - analyzes hypotheses and provides final results

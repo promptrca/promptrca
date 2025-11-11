@@ -42,24 +42,24 @@ class HypothesisAgent:
             self.strands_agent = None
     
     def generate_hypotheses(self, facts: List[Fact]) -> List[Hypothesis]:
-        """Generate hypotheses from facts using AI or fallback to heuristics."""
+        """Generate hypotheses from facts using AI."""
         if not facts:
             logger.warning("No facts provided for hypothesis generation")
             return []
 
         logger.info(f"Generating hypotheses from {len(facts)} facts")
 
-        # Try AI-powered hypothesis generation first
-        if self.strands_agent:
-            try:
-                base_hypotheses = self._generate_hypotheses_with_ai(facts)
-                return base_hypotheses
-            except Exception as e:
-                logger.error(f"AI hypothesis generation failed: {e}, falling back to heuristics")
-                return self._generate_hypotheses_heuristic(facts)
-        else:
-            logger.warning("No Strands agent available, using heuristic approach")
-            return self._generate_hypotheses_heuristic(facts)
+        # AI-powered hypothesis generation (required)
+        if not self.strands_agent:
+            logger.error("No Strands agent available - cannot generate hypotheses")
+            return []
+
+        try:
+            base_hypotheses = self._generate_hypotheses_with_ai(facts)
+            return base_hypotheses
+        except Exception as e:
+            logger.error(f"AI hypothesis generation failed: {e}")
+            return []
 
     def _generate_hypotheses_with_ai(self, facts: List[Fact]) -> List[Hypothesis]:
         """Generate hypotheses using Strands AI agent."""
@@ -68,80 +68,68 @@ class HypothesisAgent:
         # Build the prompt for AI
         facts_text = "\n".join([f"- [{f.source}] {f.content} (confidence: {f.confidence:.2f})" for f in facts])
 
-        prompt = f"""You will be given a set of facts collected during an incident investigation. Your objective is to methodically analyze these facts and generate evidence-based hypotheses about the root cause.
+        prompt = f"""You are an expert incident analyst conducting root cause analysis. Analyze the provided facts and generate evidence-based hypotheses.
 
-EXPERT ROLE: You are an expert incident analyst with strong pattern recognition skills and deep understanding of cloud system failure modes. You excel at connecting evidence to potential root causes.
-
-FACTS (from investigation tools):
+FACTS FROM INVESTIGATION:
 {facts_text}
 
-REASONING PROCESS (follow these steps sequentially):
+ANALYSIS METHODOLOGY:
 
 STEP 1: IDENTIFY EXPLICIT ERRORS
-- Look for exact error messages, exceptions, or failure indicators in facts
-- Note error types: runtime exceptions, permission denials, timeouts, etc.
-- Example: "AccessDenied" → permission_issue with 0.90+ confidence
+- Extract exact error messages, exceptions, status codes, and failure indicators
+- Classify error types: application errors, permission denials, timeouts, resource exhaustion, network failures
+- Direct error evidence receives highest confidence
 
 STEP 2: IDENTIFY CONFIGURATION ISSUES
-- Look for configuration values that contradict requirements or best practices
-- Check for mismatches between settings and observed behavior
-- Example: timeout=3s + "timed out after 3s" → timeout with 0.85+ confidence
+- Compare configuration values against observed behavior
+- Look for mismatches between expected and actual behavior
+- Check for missing or incorrect settings
 
 STEP 3: CORRELATE RELATED FACTS
-- Group facts that point to the same underlying issue
-- Stronger hypotheses need 2+ supporting facts
-- Example: "high memory usage" + "near memory limit" → resource_constraint with 0.80+ confidence
+- Group facts that indicate the same underlying issue
+- Multiple corroborating facts increase confidence
+- Look for cause-and-effect relationships between facts
 
 STEP 4: ASSIGN CONFIDENCE SCORES
-- 0.95-1.0: Explicit error message with stack trace/error code
-- 0.85-0.94: Configuration mismatch directly observed
-- 0.70-0.84: Strong correlation between 2+ facts
-- 0.50-0.69: Weak correlation or single indirect fact
+Use this calibration:
+- 0.95-1.0: Explicit error with complete stack trace or detailed error code
+- 0.85-0.94: Configuration mismatch directly observed with clear evidence
+- 0.70-0.84: Strong correlation between 2+ independent facts
+- 0.50-0.69: Weak correlation or single indirect indicator
 - <0.50: DO NOT create hypothesis - insufficient evidence
 
 STEP 5: VALIDATE EVIDENCE
-- Every hypothesis MUST cite specific fact content as evidence
-- Do NOT reference facts that don't exist
-- Do NOT create hypotheses without evidence
+- Every hypothesis MUST cite specific facts as evidence
+- Do NOT invent or assume information not present in facts
+- Do NOT create hypotheses without supporting evidence
+
+DISTRIBUTED SYSTEM PRINCIPLES:
+- Success at transport layer (HTTP 2xx, network ACK) does not guarantee application-level success
+- Permission/authorization errors may be masked by generic error responses
+- Timeout values matching actual failure duration strongly indicate timeout root cause
+- Service-to-service calls: investigate the service returning the error, not just the caller
+- Missing credentials, roles, or policies between integrated components cause authentication failures
+- Configuration drift between environments causes unexpected behavior
 
 CONFIDENCE CALIBRATION EXAMPLES:
-- "ZeroDivisionError at line 42" → code_bug, confidence=0.95 (explicit error)
-- "timeout=3s" + "timed out after 3.00s" → timeout, confidence=0.88 (config + observation)
-- "high error rate" → error_rate, confidence=0.70 (single metric without root cause)
-- "AccessDenied when calling PutObject" → permission_issue, confidence=0.92 (explicit permission error)
-
-AWS-SPECIFIC PATTERNS (critical for cloud investigations):
-- "API Gateway invoked Step Functions" + "HTTP 200" + "lacks StartSyncExecution permission" → permission_issue, confidence=0.90
-- "HTTP 200" + "AccessDeniedException in response body" → permission_issue, confidence=0.95
-- "Lambda timeout=30s" + "duration=29.9s" → timeout, confidence=0.85
-- "API Gateway → Step Functions" + "missing IAM role" → configuration_error, confidence=0.88
-- "Step Functions call returned HTTP 200" + "execution logs show permission denied" → permission_issue, confidence=0.92
-
-IMPORTANT AWS BEHAVIOR:
-- HTTP 200 responses can contain permission errors in the response body
-- API Gateway → Step Functions integration requires specific IAM permissions (states:StartSyncExecution)
-- Service-to-service calls may succeed at HTTP level but fail at application level
-- Always check IAM permissions when services interact, even with HTTP 200
+- Explicit error with code: "AccessDenied error code 403" → permission_issue, 0.92+ confidence
+- Config + observation match: "timeout=5s" + "request failed at 5.01s" → timeout, 0.88 confidence
+- Single metric without context: "high error rate observed" → error_rate, 0.70 confidence
+- Runtime exception: "NullPointerException in module X" → code_bug, 0.95 confidence
 
 HYPOTHESIS TYPES:
-permission_issue, configuration_error, code_bug, timeout, resource_constraint, integration_failure, infrastructure_issue
-
-RULES:
-- Each hypothesis must cite specific facts as evidence
-- Do NOT invent scenarios not in facts
-- Rank by confidence (highest first)
-- THINK through steps 1-5 before responding
+permission_issue, configuration_error, code_bug, timeout, resource_constraint, integration_failure, infrastructure_issue, network_issue, authentication_failure, data_validation_error
 
 CRITICAL REQUIREMENTS:
-- Be thorough and evidence-based - every hypothesis needs concrete facts
-- Eliminate speculation - if there's insufficient evidence, don't create a hypothesis
-- Base ALL hypotheses on the provided facts, never on assumptions
-- Assign confidence scores honestly based on evidence strength
-- Cross-reference facts to ensure hypotheses are supported
+- Base ALL hypotheses exclusively on provided facts
+- Never speculate or make assumptions beyond the evidence
+- Assign confidence scores that reflect actual evidence strength
+- Include specific fact content as evidence for each hypothesis
+- If evidence is weak or contradictory, acknowledge this with lower confidence
 
 OUTPUT FORMAT:
-First, provide your reasoning process wrapped between <REASONING_START> and <REASONING_END> tags.
-Then, provide the JSON output.
+First, provide your analysis wrapped in <REASONING_START> and <REASONING_END> tags.
+Then, provide structured JSON output.
 
 JSON: [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}}]"""
 
@@ -197,7 +185,7 @@ JSON: [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence":
         json_str = response_str[start_idx:end_idx]
         return json.loads(json_str)
 
-    def _generate_hypotheses_heuristic(self, facts: List[Fact]) -> List[Hypothesis]:
+    def _generate_hypotheses_heuristic_DEPRECATED(self, facts: List[Fact]) -> List[Hypothesis]:
         """Fallback heuristic-based hypothesis generation."""
         logger.info("📊 Using heuristic approach for hypothesis generation")
 

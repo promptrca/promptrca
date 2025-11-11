@@ -127,53 +127,82 @@ class APIGatewaySpecialist(BaseSpecialist):
         facts = []
         
         try:
-            # Common API Gateway execution role naming patterns
-            possible_roles = [
-                f"{api_id}-role",
-                "sherlock-test-test-faulty-apigateway-role",  # Known role from testing
-                "sherlock-test-test-api-gateway-role",
-                "sherlock-test-test-apigateway-cloudwatch-role",
-                f"sherlock-test-test-api-role", 
-                f"apigateway-{api_id}-role",
-                f"{api_id}-execution-role"
-            ]
-            
+            # Discover integration credentials (role ARN) directly from API Gateway config
+            from ..tools.apigateway_tools import get_api_gateway_stage_config
             from ..tools.iam_tools import get_iam_role_config
-            
-            for role_name in possible_roles:
+
+            config_json = get_api_gateway_stage_config(api_id, stage)
+            config = json.loads(config_json)
+
+            if 'error' in config:
+                facts.append(self._create_fact(
+                    source='iam_analysis',
+                    content=f"Unable to retrieve API Gateway stage config for {api_id}/{stage}",
+                    confidence=0.6,
+                    metadata={
+                        'api_id': api_id,
+                        'stage': stage,
+                        'status': 'stage_config_error'
+                    }
+                ))
+                return facts
+
+            integrations = config.get('integrations', [])
+
+            # Collect unique credentials roles from integrations (if present)
+            candidate_role_arns: List[str] = []
+            for integration in integrations:
+                role_arn = integration.get('credentials_role')
+                if role_arn:
+                    candidate_role_arns.append(role_arn)
+
+            # De-duplicate while preserving order
+            seen = set()
+            candidate_role_arns = [arn for arn in candidate_role_arns if not (arn in seen or seen.add(arn))]
+
+            if not candidate_role_arns:
+                facts.append(self._create_fact(
+                    source='iam_analysis',
+                    content="No integration credentials role found on API methods",
+                    confidence=0.9,
+                    metadata={
+                        'api_id': api_id,
+                        'stage': stage,
+                        'status': 'no_credentials_role'
+                    }
+                ))
+                return facts
+
+            # Evaluate each discovered role for Step Functions permissions
+            for role_arn in candidate_role_arns:
+                # IAM GetRole expects RoleName, not ARN
+                role_name = role_arn.split('/')[-1] if '/' in role_arn else role_arn.split(':')[-1]
                 try:
-                    self.logger.info(f"   → Checking IAM role: {role_name}")
+                    self.logger.info(f"   → Checking IAM role from integration: {role_name}")
                     role_config_json = get_iam_role_config(role_name)
                     role_config = json.loads(role_config_json)
-                    
-                    if 'error' not in role_config:
-                        # Check if role has Step Functions permissions
-                        has_stepfunctions_permission = self._check_stepfunctions_permissions(role_config)
-                        
-                        if has_stepfunctions_permission:
-                            facts.append(self._create_fact(
-                                source='iam_analysis',
-                                content=f"API Gateway role {role_name} has Step Functions StartSyncExecution permission",
-                                confidence=0.9,
-                                metadata={
-                                    'role': role_name,
-                                    'permission': 'states:StartSyncExecution',
-                                    'status': 'granted'
-                                }
-                            ))
-                        else:
-                            facts.append(self._create_fact(
-                                source='iam_analysis',
-                                content=f"API Gateway role {role_name} lacks Step Functions StartSyncExecution permission",
-                                confidence=0.95,
-                                metadata={
-                                    'role': role_name,
-                                    'permission': 'states:StartSyncExecution',
-                                    'status': 'missing'
-                                }
-                            ))
-                        break  # Found the role, stop checking others
-                    
+
+                    if 'error' in role_config:
+                        self.logger.debug(f"Could not load role config for {role_name}: {role_config.get('error')}")
+                        continue
+
+                    has_stepfunctions_permission = self._check_stepfunctions_permissions(role_config)
+
+                    facts.append(self._create_fact(
+                        source='iam_analysis',
+                        content=(
+                            f"API Gateway role {role_name} has Step Functions StartSyncExecution permission"
+                            if has_stepfunctions_permission else
+                            f"API Gateway role {role_name} lacks Step Functions StartSyncExecution permission"
+                        ),
+                        confidence=0.9 if has_stepfunctions_permission else 0.95,
+                        metadata={
+                            'role': role_name,
+                            'role_arn': role_arn,
+                            'permission': 'states:StartSyncExecution',
+                            'status': 'granted' if has_stepfunctions_permission else 'missing'
+                        }
+                    ))
                 except Exception as e:
                     self.logger.debug(f"Could not check role {role_name}: {e}")
                     continue

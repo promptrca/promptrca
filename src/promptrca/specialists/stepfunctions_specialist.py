@@ -83,7 +83,7 @@ class StepFunctionsSpecialist(BaseSpecialist):
             # For testing purposes, use known ARN pattern
             # TODO: Improve input parsing to preserve full execution ARNs
             if resource_name and len(resource_name) > 10:  # Likely an execution ID
-                return f"arn:aws:states:eu-west-1:840181656986:execution:sherlock-test-test-faulty-state-machine:{resource_name}"
+                return f"arn:aws:states:eu-west-1:840181656986:execution:promptrca-test-test-faulty-state-machine:{resource_name}"
         
         return None
     

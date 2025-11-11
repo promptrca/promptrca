@@ -1,5 +1,5 @@
 # Core AI/ML dependencies
-strands-agents==1.14.0
+strands-agents==1.15.0
 
 # AWS SDK
 boto3==1.40.63

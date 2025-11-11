@@ -126,115 +126,35 @@ class LeadOrchestratorAgent:
     
     def _create_lead_agent(self) -> Agent:
         """Create the lead orchestrator agent with all specialist tools."""
-        
+
+        # Load system prompt from markdown file
+        import os
+        prompt_path = os.path.join(os.path.dirname(__file__), '..', 'prompts', 'lead_orchestrator.md')
+        with open(prompt_path, 'r') as f:
+            base_system_prompt = f.read()
+
         # Check if AWS Knowledge MCP is enabled
         from ..utils.config import get_mcp_config
         mcp_config = get_mcp_config()
         mcp_enabled = mcp_config.get("enabled", False)
-        
-        # Build system prompt based on MCP availability
+
+        # Augment prompt if MCP is enabled
         if mcp_enabled:
-            system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
+            system_prompt = base_system_prompt + """
 
-INVESTIGATION FLOW (CRITICAL ORDER):
-1. **FIRST: Check AWS Service Health** → Use check_aws_service_health() to rule out AWS-side issues
-2. **SECOND: Check CloudTrail** → Use get_recent_cloudtrail_events() to find recent configuration changes
-3. If X-Ray trace ID provided → analyze trace data to discover service interactions and error flows
-4. From trace/context, identify AWS services involved in the incident
-5. Delegate to appropriate specialist agents based on discovered services and error patterns
-6. Use AWS Knowledge tools to get official documentation and best practices when relevant
-7. Synthesize findings from all specialists into a comprehensive analysis
+## AWS Knowledge Integration (MCP Enabled)
 
-WHY THIS ORDER MATTERS:
-- AWS Service Health: If AWS is down, don't waste time investigating your code
-- CloudTrail: 80% of incidents are caused by recent configuration changes
-- X-Ray: Shows the actual error flow and affected services
-- Specialists: Deep dive into specific service issues
-
-SPECIALIST DELEGATION STRATEGY:
-- Lambda functions: Delegate to Lambda specialist for function configuration, logs, and performance issues
-- API Gateway: Delegate to API Gateway specialist for integration, routing, and request/response problems
-- Step Functions: Delegate to Step Functions specialist for workflow execution and state machine issues
-- DynamoDB: Delegate to DynamoDB specialist for table performance, capacity, and throttling issues
-- IAM: Delegate to IAM specialist for permission and access control problems
-- S3: Delegate to S3 specialist for storage, access, and bucket configuration issues
-- SQS/SNS: Delegate to messaging specialists for queue and notification delivery problems
-- EventBridge: Delegate to EventBridge specialist for event routing and rule execution issues
-- VPC: Delegate to VPC specialist for networking, security groups, and connectivity problems
-
-AWS KNOWLEDGE INTEGRATION:
 - Use AWS documentation tools to enhance findings with official best practices
 - Cross-reference specialist findings with AWS guidance and recommendations
 - Provide authoritative context for complex AWS service interactions
+- Validate findings against official AWS documentation
 
-COORDINATION RULES:
-- Delegate to specialists for services explicitly mentioned OR discovered in X-Ray trace
-- Provide rich context to specialists (error messages, trace findings, business impact)
-- Focus on the actual error source identified in trace analysis, not just mentioned services
-- Use AWS Knowledge tools to validate findings and provide authoritative guidance
-- Synthesize specialist findings into coherent root cause analysis
-- Do NOT generate hypotheses yourself - let specialists do their domain-specific analysis
-- Do NOT speculate about services not observed in traces or context
-
-OUTPUT: Relay specialist findings with AWS documentation context when relevant"""
+Use these additional tools:
+- search_aws_documentation(query) - Search AWS docs for relevant information
+- read_aws_documentation(url) - Read specific AWS documentation page
+- get_aws_documentation_recommendations() - Get relevant AWS best practices"""
         else:
-            system_prompt = """You are the lead AWS incident investigator. Your role: coordinate specialist agents and gather evidence.
-
-INVESTIGATION FLOW (CRITICAL ORDER):
-1. **FIRST: Check AWS Service Health** → Use check_aws_service_health() to rule out AWS-side issues
-2. **SECOND: Check CloudTrail** → Use get_recent_cloudtrail_events() to find recent configuration changes
-3. If X-Ray trace ID provided → call get_xray_trace to discover service interactions
-4. From trace/context, identify AWS services involved
-5. Call appropriate specialist agent for each service (call ONCE per service)
-6. Return all findings - let downstream agents synthesize
-
-WHY THIS ORDER MATTERS:
-- AWS Service Health: If AWS is down, don't waste time investigating your code
-- CloudTrail: 80% of incidents are caused by recent configuration changes
-- X-Ray: Shows the actual error flow and affected services
-- Specialists: Deep dive into specific service issues
-
-AVAILABLE SPECIALISTS:
-- investigate_lambda_function(function_name, context)
-- investigate_apigateway(api_id, stage, context)
-- investigate_stepfunctions(state_machine_arn, context)
-- investigate_iam_role(role_name, context)
-- investigate_dynamodb_issue(issue_description)
-- investigate_s3_issue(issue_description)
-- investigate_sqs_issue(issue_description)
-- investigate_sns_issue(issue_description)
-- investigate_eventbridge_issue(issue_description)
-- investigate_vpc_issue(issue_description)
-
-DELEGATION DECISION PROCESS:
-1. Extract service names/ARNs from trace data (DO NOT invent)
-2. For EACH discovered service → call its specialist ONCE
-3. Pass rich context (error messages, trace excerpts, timing info)
-4. Aggregate all specialist responses
-5. Return structured output with findings from ALL specialists
-
-EVIDENCE-BASED DELEGATION:
-- ONLY delegate to specialists for services with evidence:
-  * Service name appears in trace subsegments
-  * Service mentioned in error messages
-  * Service ARN in target resources list
-- DO NOT delegate to services based on assumptions
-- If unsure whether to investigate a service → DON'T
-
-QUALITY CONTROL:
-- Verify tool outputs before relaying them
-- If specialist returns empty results → include that fact
-- If specialist call fails → report the failure
-- Distinguish between "no issues found" vs "couldn't investigate"
-
-RULES:
-- Call specialists for services explicitly mentioned OR discovered in X-Ray trace
-- Provide context to specialists (error messages, trace findings)
-- Do NOT generate hypotheses yourself - specialists will do that
-- Do NOT speculate about services not observed
-- Be concise
-
-OUTPUT: Relay specialist findings"""
+            system_prompt = base_system_prompt
         
         # Build tools list - no binding needed since tools get client from context
         from ..tools import (
@@ -698,12 +618,12 @@ OUTPUT: Relay specialist findings"""
             # Add specific resource details to prevent hallucination
             for target in context.primary_targets:
                 if target.type == "apigateway" and target.arn:
-                    # Extract API ID from ARN to prevent hallucination
+                    # Extract API ID from ARN
                     if "restapis/" in target.arn:
                         api_id = target.arn.split("restapis/")[1].split("/")[0]
-                        prompt_parts.append(f"  - API Gateway ID: {api_id} (use this exact ID, not 'shp123456')")
+                        prompt_parts.append(f"  - API Gateway ID: {api_id}")
                 elif target.type == "lambda_function":
-                    prompt_parts.append(f"  - Lambda Function: {target.name} (only investigate if explicitly listed)")
+                    prompt_parts.append(f"  - Lambda Function: {target.name}")
         else:
             prompt_parts.append("\n⚠️ CRITICAL: No AWS resources identified.")
             prompt_parts.append("DO NOT assume, infer, or hallucinate resource names.")
@@ -723,17 +643,17 @@ OUTPUT: Relay specialist findings"""
         prompt_parts.append("4. Focus investigation on the component that shows the actual error")
         prompt_parts.append("5. DO NOT assume configuration issues if the trace shows code errors")
         
-        prompt_parts.append("\n🚨 ANTI-HALLUCINATION RULES:")
-        prompt_parts.append("1. ONLY investigate resources explicitly listed in 'Target Resources' above")
+        prompt_parts.append("\n🚨 EVIDENCE-BASED INVESTIGATION RULES:")
+        prompt_parts.append("1. ONLY investigate resources explicitly listed in 'Target Resources' section")
         prompt_parts.append("2. DO NOT make up, assume, or infer resource names, ARNs, or identifiers")
-        prompt_parts.append("3. DO NOT investigate Lambda functions unless explicitly listed in Target Resources")
-        prompt_parts.append("4. DO NOT investigate Step Functions unless explicitly listed in Target Resources")
-        prompt_parts.append("5. DO NOT use placeholder API IDs like 'shp123456' - use actual IDs from trace data")
-        prompt_parts.append("6. Base analysis ONLY on data returned from tools")
-        prompt_parts.append("7. If tool returns 'ResourceNotFoundException', report as fact")
-        prompt_parts.append("8. If no data available, state 'Insufficient data'")
-        prompt_parts.append("9. If you see 'STEPFUNCTIONS' in trace data, it is NOT a Lambda function")
-        prompt_parts.append("10. If you see 'promptrca-handler' or similar names, DO NOT investigate unless listed in Target Resources")
+        prompt_parts.append("3. DO NOT investigate resources unless they appear in: Target Resources, trace data, or tool outputs")
+        prompt_parts.append("4. Use exact resource identifiers from trace data - never use placeholders or invented IDs")
+        prompt_parts.append("5. Base analysis exclusively on data returned from tools")
+        prompt_parts.append("6. If tool returns 'ResourceNotFoundException' or errors, report this as a fact")
+        prompt_parts.append("7. If no data available for a resource, state 'Insufficient data' - do not speculate")
+        prompt_parts.append("8. Distinguish between resource types accurately (e.g., state machines vs functions)")
+        prompt_parts.append("9. Only call specialist tools for resources with concrete evidence of involvement")
+        prompt_parts.append("10. Tool output is ground truth - never contradict or embellish tool responses")
         
         prompt_parts.append("\nWORKFLOW:")
         prompt_parts.append("1. FIRST: Analyze X-Ray trace data to identify the actual error source")
@@ -742,16 +662,19 @@ OUTPUT: Relay specialist findings"""
         prompt_parts.append("4. FOURTH: Provide recommendations based on actual error evidence")
         
         prompt_parts.append("\nTRACE ANALYSIS PRINCIPLES:")
-        prompt_parts.append("- Look for HTTP status codes: 500 = server error, 400 = client error, 200 = success")
-        prompt_parts.append("- Check fault/error flags: fault=true indicates a problem, error=true indicates downstream issues")
-        prompt_parts.append("- Follow the error flow: if a service calls another service and gets an error, investigate the called service")
-        prompt_parts.append("- Check response content_length: > 0 means there's an error response body with details")
-        prompt_parts.append("- Look at subsegments: they show the actual service calls and their results")
-        
-        prompt_parts.append("\nEXAMPLE OF CORRECT BEHAVIOR:")
-        prompt_parts.append("- Trace shows Service A calls Service B, Service B returns HTTP 500 → Investigate Service B")
-        prompt_parts.append("- Trace shows Service A fault:true + Service B returns 500 → Root cause is Service B, not Service A config")
-        prompt_parts.append("- Trace shows HTTP 500 + content_length > 0 → Check the error response body for details")
+        prompt_parts.append("- HTTP status codes indicate success/failure: 5xx = server error, 4xx = client error, 2xx = success")
+        prompt_parts.append("- Fault/error flags indicate problems: fault=true means component error, error=true means downstream issue")
+        prompt_parts.append("- Follow error flow: when service A calls service B and receives error, investigate service B")
+        prompt_parts.append("- Response content_length > 0 may contain error details in response body")
+        prompt_parts.append("- Subsegments show actual service interactions and their outcomes")
+        prompt_parts.append("- Timing data reveals latency and timeout issues")
+
+        prompt_parts.append("\nINVESTIGATION APPROACH:")
+        prompt_parts.append("- When service-to-service call fails: investigate the called service showing the error")
+        prompt_parts.append("- When fault flag present with error status: root cause is in the faulting component")
+        prompt_parts.append("- When error response has content: examine response body for specific error details")
+        prompt_parts.append("- When multiple components involved: trace the error backwards from failure point")
+        prompt_parts.append("- When tool returns no data: report insufficient data rather than speculating")
         
         return "\n".join(prompt_parts)
     
