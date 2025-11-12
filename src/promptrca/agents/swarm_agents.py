@@ -355,19 +355,6 @@ def create_root_cause_agent_standalone() -> Agent:
     )
 
 
-def create_root_cause_agent_standalone() -> Agent:
-    """
-    Create the root cause analyzer agent (used outside swarm).
-    
-    This agent analyzes hypotheses and determines the most likely root cause.
-    Used as a standalone Graph node.
-    
-    Returns:
-        Agent configured for root cause analysis
-    """
-    return create_root_cause_agent()
-
-
 def create_swarm_agents() -> List[Agent]:
     """
     Create all swarm agents following Strands best practices.
