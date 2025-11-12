@@ -50,103 +50,59 @@ For each hypothesis:
 
 ## Output Format
 
-Return your analysis in this structured format:
+Provide your root cause analysis in clear, structured text:
 
-```json
-{
-  "primary_root_cause": {
-    "type": "category",
-    "description": "Clear description of the root cause",
-    "confidence": 0.0-1.0,
-    "evidence": ["fact1", "fact2", "fact3"]
-  },
-  "contributing_factors": [
-    {
-      "type": "category",
-      "description": "Secondary issue that contributed",
-      "confidence": 0.0-1.0,
-      "evidence": ["fact1", "fact2"]
-    }
-  ],
-  "confidence_score": 0.0-1.0,
-  "analysis_summary": "Detailed explanation of why this is the root cause, how evidence supports it, and reasoning chain from symptoms to cause. Acknowledge any limitations in the evidence."
-}
+```
+PRIMARY ROOT CAUSE:
+Type: [category]
+Description: [Clear description of the root cause]
+Confidence: [0.0-1.0]
+Evidence:
+- [Specific fact 1]
+- [Specific fact 2]
+
+CONTRIBUTING FACTORS:
+1. [Secondary cause 1] (if any)
+2. [Secondary cause 2] (if any)
+
+OVERALL CONFIDENCE: [0.0-1.0]
+
+ANALYSIS SUMMARY:
+[2-3 sentences explaining why this is the root cause, how evidence supports it, and reasoning chain from symptoms to cause. Acknowledge any limitations in the evidence.]
 ```
 
-**Important:**
-- `primary_root_cause`: The MAIN root cause (highest confidence hypothesis)
-- `contributing_factors`: Secondary causes (can be empty list if only one cause)
-- `confidence_score`: Overall confidence in this RCA (0.0-1.0)
-- `analysis_summary`: 2-3 sentences explaining the reasoning
+Keep it clear and evidence-based. The report generation node will use your analysis.
 
 ## Examples
 
 ### ✅ CORRECT: Evidence-Based Analysis
 
-**Input:**
-```
-Hypotheses:
+**Input Hypotheses:**
 1. Lambda execution role missing DynamoDB:PutItem permission (confidence: 0.95)
-   Evidence: AccessDeniedException, IAM policy check shows missing permission
+   - Evidence: AccessDeniedException, IAM policy check shows missing permission
 2. DynamoDB table throttling (confidence: 0.3)
-   Evidence: No throttle events found in metrics
-```
+   - Evidence: No throttle events found in metrics
 
-**Your Output:**
-```json
-{
-  "primary_root_cause": {
-    "type": "permission_issue",
-    "description": "Lambda execution role lacks required DynamoDB:PutItem permission",
-    "confidence": 0.95,
-    "evidence": [
-      "AccessDeniedException when invoking DynamoDB",
-      "IAM policy analysis confirms missing dynamodb:PutItem permission",
-      "Role has dynamodb:GetItem but not PutItem"
-    ]
-  },
-  "contributing_factors": [],
-  "confidence_score": 0.95,
-  "analysis_summary": "The root cause is a missing IAM permission. The Lambda function's execution role has read permissions (GetItem) but lacks write permissions (PutItem), causing AccessDeniedException errors. The evidence is direct and explicit, resulting in high confidence. The throttling hypothesis was ruled out as metrics showed no throttle events."
-}
-```
+**Your Analysis:**
+
+The primary root cause is the missing IAM permission (hypothesis #1). The Lambda function's execution role has read permissions (GetItem) but lacks write permissions (PutItem), causing AccessDeniedException errors. The evidence is direct and explicit with a confidence of 0.95.
+
+The throttling hypothesis (#2) was ruled out as CloudWatch metrics showed no throttle events. This is clearly a permission issue, not a capacity issue.
+
+Overall confidence: 0.95 (high - direct error evidence)
 
 ### ❌ INCORRECT: Speculation Without Evidence
 
-**Input:**
-```
-Hypotheses:
+**Input Hypotheses:**
 1. Configuration issue (confidence: 0.3 - limited data)
-```
 
-**Wrong Output:**
-```json
-{
-  "primary_root_cause": {
-    "type": "timeout",
-    "description": "Lambda timeout set too low at 3 seconds",
-    "confidence": 0.8,
-    "evidence": ["Function times out frequently"]
-  }
-}
-```
+**Wrong Analysis:**
+"The root cause is Lambda timeout set too low at 3 seconds. The function times out frequently..."
 
 **WRONG!** The hypothesis didn't mention timeouts or 3 seconds. Never introduce details not in the evidence!
 
-**Correct Output:**
-```json
-{
-  "primary_root_cause": {
-    "type": "configuration_issue",
-    "description": "Configuration issue detected but insufficient data to identify specific cause",
-    "confidence": 0.3,
-    "evidence": ["Limited data available from investigation"]
-  },
-  "contributing_factors": [],
-  "confidence_score": 0.3,
-  "analysis_summary": "Investigation found evidence of a configuration issue but specialists returned limited data. Confidence is low (0.3) due to insufficient evidence. Recommend manual review of resource configuration or re-running investigation with more detailed logging enabled."
-}
-```
+**Correct Analysis:**
+"Investigation found evidence of a configuration issue but specialists returned limited data. Cannot identify the specific configuration problem without more evidence. Confidence is low (0.3) due to insufficient data. Recommend manual review of resource configuration or re-running investigation with more detailed logging enabled."
 
 ## Key Principles
 

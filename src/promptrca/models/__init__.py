@@ -20,11 +20,12 @@ Contact: info@promptrca.com
 
 """
 
-from .base import Fact, Hypothesis, Advice, InvestigationReport, InvestigationTarget, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
+from .base import Fact, Hypothesis, HypothesesList, Advice, InvestigationReport, InvestigationTarget, AffectedResource, SeverityAssessment, RootCauseAnalysis, EventTimeline
 
 __all__ = [
     "Fact",
     "Hypothesis",
+    "HypothesesList",
     "Advice",
     "InvestigationReport",
     "InvestigationTarget",

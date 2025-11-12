@@ -43,6 +43,19 @@ class Hypothesis(BaseModel):
     evidence: List[str] = Field(default_factory=list, description="List of evidence supporting this hypothesis")
 
 
+class HypothesesList(BaseModel):
+    """
+    List of hypotheses generated from investigation findings.
+
+    Used for structured output from hypothesis_generator agent.
+    """
+    hypotheses: List[Hypothesis] = Field(
+        description="List of 1-3 evidence-based hypotheses about the root cause",
+        min_items=0,
+        max_items=5
+    )
+
+
 class Advice(BaseModel):
     """Represents actionable advice for remediation."""
     title: str = Field(description="Title of the advice or recommendation")

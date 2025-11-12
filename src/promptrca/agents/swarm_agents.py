@@ -236,21 +236,20 @@ def create_sns_agent() -> Agent:
 def create_hypothesis_agent() -> Agent:
     """
     Create hypothesis generation agent with synthesis focus.
-    
+
     This agent collects findings from all specialist agents and generates
-    evidence-based hypotheses about root causes. It has mandatory handoff
-    to root cause analysis.
-    
+    evidence-based hypotheses about root causes. Returns text output that
+    flows to the next graph node.
+
     Returns:
-        Agent configured for hypothesis generation with mandatory handoff
+        Agent configured for hypothesis generation
     """
     return Agent(
         name="hypothesis_generator",
         description=(
             "Analyzes structured facts from specialist agents and generates "
             "evidence-based hypotheses about root causes. Receives investigation "
-            "findings and produces ranked hypotheses with confidence scores. "
-            "Always hands off to root_cause_analyzer after generating hypotheses."
+            "findings and produces ranked hypotheses with confidence scores."
         ),
         model=create_hypothesis_agent_model(),
         system_prompt=load_prompt("hypothesis_generator"),
@@ -332,7 +331,8 @@ def create_root_cause_agent_standalone() -> Agent:
     Create the root cause analyzer agent (used as Graph node).
 
     This agent evaluates hypotheses from hypothesis_generator and identifies
-    the primary root cause with supporting evidence. Used as a standalone Graph node.
+    the primary root cause with supporting evidence. Returns text output that
+    flows to the report_generation node.
 
     Returns:
         Agent configured for root cause analysis
