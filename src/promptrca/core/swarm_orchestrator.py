@@ -321,17 +321,17 @@ class SwarmOrchestrator:
                 self.root_cause_agent = agent
     
     def _create_investigation_graph(self):
-        """Create investigation graph with Input Parser + Swarm + post-processing nodes."""
-        
+        """Create investigation graph with Input Parser + Swarm + Analysis + Report nodes."""
+
         # Create input parser agent (FIRST NODE)
         input_parser_agent = create_input_parser_agent()
-        
+
         # Create specialist swarm (without hypothesis/root_cause agents)
         specialist_agents = create_specialist_swarm_agents()
         trace_agent = next((a for a in specialist_agents if a.name == "trace_specialist"), None)
         if not trace_agent:
             raise ValueError("trace_specialist agent not found in specialist agents")
-        
+
         specialist_swarm = Swarm(
             specialist_agents,
             entry_point=trace_agent,
@@ -342,25 +342,30 @@ class SwarmOrchestrator:
             repetitive_handoff_detection_window=8,
             repetitive_handoff_min_unique_agents=3
         )
-        
+
         # Create hypothesis generator agent
         hypothesis_agent = create_hypothesis_agent_standalone()
-        
+
+        # Create root cause analyzer agent (NEW)
+        root_cause_agent = create_root_cause_agent_standalone()
+
         # Create structured report generator custom node
         from .structured_report_node import StructuredReportNode
         report_generator = StructuredReportNode(region=self.region)
-        
+
         # Build the graph
         builder = GraphBuilder()
         builder.add_node(input_parser_agent, "input_parser")
         builder.add_node(specialist_swarm, "investigation")
         builder.add_node(hypothesis_agent, "hypothesis_generation")
+        builder.add_node(root_cause_agent, "root_cause_analysis")  # NEW
         builder.add_node(report_generator, "report_generation")
-        
+
         # Define edges (deterministic flow)
         builder.add_edge("input_parser", "investigation")
         builder.add_edge("investigation", "hypothesis_generation")
-        builder.add_edge("hypothesis_generation", "report_generation")
+        builder.add_edge("hypothesis_generation", "root_cause_analysis")  # NEW
+        builder.add_edge("root_cause_analysis", "report_generation")  # UPDATED
         
         # Set entry point to input_parser (FIRST NODE)
         builder.set_entry_point("input_parser")

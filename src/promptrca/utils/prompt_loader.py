@@ -34,33 +34,46 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
-def load_prompt(prompt_name: str, variables: Optional[Dict[str, Any]] = None) -> str:
+def load_prompt(prompt_name: str, variables: Optional[Dict[str, Any]] = None, category: Optional[str] = None) -> str:
     """
     Load a prompt from a markdown file.
-    
+
     Args:
         prompt_name: Name of the prompt file (without extension)
         variables: Optional variables for template substitution
-        
+        category: Optional subdirectory ('graph', 'swarm', 'orchestrator')
+
     Returns:
         The loaded prompt text
-        
+
     Raises:
         FileNotFoundError: If the prompt file doesn't exist
-        
+
     Examples:
-        >>> load_prompt("trace_specialist")
-        >>> load_prompt("lambda_specialist", {"region": "us-east-1"})
+        >>> load_prompt("trace_specialist", category="swarm")
+        >>> load_prompt("input_parser", category="graph")
+        >>> load_prompt("lambda_specialist", {"region": "us-east-1"}, category="swarm")
     """
-    prompt_file = PROMPTS_DIR / f"{prompt_name}.md"
-    
+    # If category specified, look in subdirectory
+    if category:
+        prompt_file = PROMPTS_DIR / category / f"{prompt_name}.md"
+    else:
+        # Try to find in subdirectories (for backward compatibility)
+        for subdir in ['graph', 'specialists']:
+            prompt_file = PROMPTS_DIR / subdir / f"{prompt_name}.md"
+            if prompt_file.exists():
+                break
+        else:
+            # Fallback to root directory
+            prompt_file = PROMPTS_DIR / f"{prompt_name}.md"
+
     if not prompt_file.exists():
         # Fallback to .txt if .md doesn't exist
-        prompt_file = PROMPTS_DIR / f"{prompt_name}.txt"
-        
+        prompt_file = prompt_file.with_suffix('.txt')
+
     if not prompt_file.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_name}")
-    
+        raise FileNotFoundError(f"Prompt file not found: {prompt_name} (searched in {PROMPTS_DIR})")
+
     try:
         with open(prompt_file, 'r', encoding='utf-8') as f:
             prompt_text = f.read()
@@ -77,46 +90,70 @@ def load_prompt(prompt_name: str, variables: Optional[Dict[str, Any]] = None) ->
         raise
 
 
-def list_available_prompts() -> list[str]:
+def list_available_prompts() -> Dict[str, list[str]]:
     """
-    List all available prompt files.
-    
+    List all available prompt files organized by category.
+
     Returns:
-        List of prompt names (without extensions)
+        Dictionary mapping categories to lists of prompt names
     """
     if not PROMPTS_DIR.exists():
-        return []
-        
-    prompts = []
+        return {}
+
+    prompts_by_category = {}
+
+    # Check subdirectories
+    for category in ['graph', 'specialists']:
+        category_dir = PROMPTS_DIR / category
+        if category_dir.exists():
+            prompts = []
+            for file_path in category_dir.glob("*.md"):
+                prompts.append(file_path.stem)
+            for file_path in category_dir.glob("*.txt"):
+                if file_path.stem not in prompts:
+                    prompts.append(file_path.stem)
+            prompts_by_category[category] = sorted(prompts)
+
+    # Check root directory for backward compatibility
+    root_prompts = []
     for file_path in PROMPTS_DIR.glob("*.md"):
-        prompts.append(file_path.stem)
+        root_prompts.append(file_path.stem)
     for file_path in PROMPTS_DIR.glob("*.txt"):
-        if file_path.stem not in prompts:  # Avoid duplicates
-            prompts.append(file_path.stem)
-            
-    return sorted(prompts)
+        if file_path.stem not in root_prompts:
+            root_prompts.append(file_path.stem)
+    if root_prompts:
+        prompts_by_category['root'] = sorted(root_prompts)
+
+    return prompts_by_category
 
 
 def validate_prompts() -> Dict[str, bool]:
     """
-    Validate that all expected prompt files exist.
-    
+    Validate that all expected prompt files exist in their correct categories.
+
     Returns:
         Dictionary mapping prompt names to existence status
     """
     expected_prompts = [
+        # Graph node prompts
+        "input_parser",
+        "hypothesis_generator",
+
+        # Specialist prompts (used in swarm and by specialized agents)
         "trace_specialist",
-        "lambda_specialist", 
+        "lambda_specialist",
         "apigateway_specialist",
         "stepfunctions_specialist",
         "iam_specialist",
         "s3_specialist",
         "sqs_specialist",
         "sns_specialist",
-        "hypothesis_generator",
-        "root_cause_analyzer"
+        "dynamodb_specialist",
+        "eventbridge_specialist",
+        "vpc_specialist",
+        "root_cause_analyzer",
     ]
-    
+
     results = {}
     for prompt_name in expected_prompts:
         try:
@@ -124,7 +161,7 @@ def validate_prompts() -> Dict[str, bool]:
             results[prompt_name] = True
         except FileNotFoundError:
             results[prompt_name] = False
-            
+
     return results
 
 

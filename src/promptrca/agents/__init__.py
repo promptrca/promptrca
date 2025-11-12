@@ -22,7 +22,6 @@ Contact: info@promptrca.com
 
 from .hypothesis_agent import HypothesisAgent
 from .advice_agent import AdviceAgent
-from .lead_orchestrator import LeadOrchestratorAgent
 from .severity_agent import SeverityAgent
 from .root_cause_agent import RootCauseAgent
 from .specialized import ExecutionFlowAgent
@@ -30,7 +29,6 @@ from .specialized import ExecutionFlowAgent
 __all__ = [
     "HypothesisAgent",
     "AdviceAgent",
-    "LeadOrchestratorAgent",
     "SeverityAgent",
     "RootCauseAgent",
     "ExecutionFlowAgent"
