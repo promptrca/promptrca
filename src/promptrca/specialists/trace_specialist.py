@@ -48,12 +48,12 @@ class TraceSpecialist(BaseSpecialist):
         self.logger.info(f"   → Analyzing trace {trace_id} deeply...")
         
         try:
-            from ..tools.xray_tools import get_xray_trace
+            from ..tools.xray_tools import get_xray_trace, get_all_resources_from_trace
             self.logger.info(f"     → Getting trace data for {trace_id}...")
-            
+
             trace_json = get_xray_trace(trace_id)
             self.logger.info(f"     → Trace JSON length: {len(trace_json) if trace_json else 0}")
-            
+
             trace_data = json.loads(trace_json)
             self.logger.info(f"     → Parsed trace data keys: {list(trace_data.keys())}")
 
@@ -69,7 +69,7 @@ class TraceSpecialist(BaseSpecialist):
 
             # Handle both AWS format (Traces key) and tool format (trace_id key)
             self.logger.info(f"     → Checking trace data format...")
-            
+
             if "Traces" in trace_data and len(trace_data["Traces"]) > 0:
                 # AWS batch_get_traces format
                 self.logger.info(f"     → Found {len(trace_data['Traces'])} traces (AWS format)")
@@ -84,7 +84,7 @@ class TraceSpecialist(BaseSpecialist):
             else:
                 self.logger.info(f"     → No valid trace data found")
                 return facts
-                
+
             # Add duration fact
             facts.append(self._create_fact(
                 source='xray_trace',
@@ -93,6 +93,77 @@ class TraceSpecialist(BaseSpecialist):
                 metadata={'trace_id': trace_id, 'duration': duration}
             ))
             self.logger.info(f"     → Added duration fact: {duration:.3f}s")
+
+            # CRITICAL ENHANCEMENT: Extract resource identifiers from trace
+            # This discovers Lambda functions, API Gateways, Step Functions, etc.
+            self.logger.info(f"     → Extracting resources from trace {trace_id}...")
+            try:
+                resources_json = get_all_resources_from_trace(trace_id)
+                resources_data = json.loads(resources_json)
+
+                if "error" not in resources_data and "resources" in resources_data:
+                    discovered_resources = resources_data.get("resources", [])
+                    self.logger.info(f"     → Discovered {len(discovered_resources)} resources in trace")
+
+                    # Add facts for each discovered resource with identifiers
+                    for resource in discovered_resources:
+                        resource_type = resource.get("type")
+                        resource_name = resource.get("name")
+
+                        if resource_type == "lambda":
+                            lambda_arn = resource.get("arn")
+                            facts.append(self._create_fact(
+                                source='xray_trace_resource_discovery',
+                                content=f"Discovered Lambda function: {resource_name}",
+                                confidence=0.95,
+                                metadata={
+                                    'trace_id': trace_id,
+                                    'resource_type': 'lambda',
+                                    'function_name': resource_name,
+                                    'function_arn': lambda_arn,
+                                    'region': resource.get('region')
+                                }
+                            ))
+                            self.logger.info(f"       • Lambda: {resource_name} (ARN: {lambda_arn})")
+
+                        elif resource_type == "apigateway":
+                            api_id = resource.get("name")
+                            stage = resource.get("stage")
+                            api_arn = resource.get("arn")
+                            facts.append(self._create_fact(
+                                source='xray_trace_resource_discovery',
+                                content=f"Discovered API Gateway: {api_id} (stage: {stage})",
+                                confidence=0.95,
+                                metadata={
+                                    'trace_id': trace_id,
+                                    'resource_type': 'apigateway',
+                                    'api_id': api_id,
+                                    'stage': stage,
+                                    'api_arn': api_arn
+                                }
+                            ))
+                            self.logger.info(f"       • API Gateway: {api_id} stage={stage}")
+
+                        elif resource_type == "stepfunctions":
+                            execution_arn = resource.get("execution_arn")
+                            facts.append(self._create_fact(
+                                source='xray_trace_resource_discovery',
+                                content=f"Discovered Step Functions execution",
+                                confidence=0.95,
+                                metadata={
+                                    'trace_id': trace_id,
+                                    'resource_type': 'stepfunctions',
+                                    'execution_arn': execution_arn
+                                }
+                            ))
+                            self.logger.info(f"       • Step Functions execution: {execution_arn}")
+
+                else:
+                    self.logger.info(f"     → No resources discovered in trace (may be minimal trace data)")
+
+            except Exception as e:
+                self.logger.warning(f"     → Failed to extract resources from trace: {e}")
+                # Don't fail the entire analysis if resource extraction fails
 
             # Analyze segments for service interactions and errors
             facts.extend(self._analyze_segments(segments, trace_id))
