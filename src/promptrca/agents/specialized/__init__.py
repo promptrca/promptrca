@@ -31,6 +31,8 @@ from .sqs_agent import create_sqs_agent, create_sqs_agent_tool
 from .sns_agent import create_sns_agent, create_sns_agent_tool
 from .eventbridge_agent import create_eventbridge_agent, create_eventbridge_agent_tool
 from .vpc_agent import create_vpc_agent, create_vpc_agent_tool
+from .ecs_agent import create_ecs_agent, create_ecs_agent_tool
+from .rds_agent import create_rds_agent, create_rds_agent_tool
 
 __all__ = [
     "ExecutionFlowAgent",
@@ -53,5 +55,9 @@ __all__ = [
     "create_eventbridge_agent",
     "create_eventbridge_agent_tool",
     "create_vpc_agent",
-    "create_vpc_agent_tool"
+    "create_vpc_agent_tool",
+    "create_ecs_agent",
+    "create_ecs_agent_tool",
+    "create_rds_agent",
+    "create_rds_agent_tool"
 ]
