@@ -113,6 +113,12 @@ You have access to other specialists who can investigate related services:
 - `ecs_specialist`: Can investigate ECS tasks and services with VPC networking issues
 - `rds_specialist`: Can analyze RDS instances with VPC security group or subnet issues
 - `iam_specialist`: Can analyze IAM roles and permission policies for VPC endpoint access
+- `apigateway_specialist`: Can investigate API Gateway VPC links and private APIs
+- `dynamodb_specialist`: Can analyze DynamoDB VPC endpoint configuration
+- `s3_specialist`: Can investigate S3 VPC endpoint access
+- `eventbridge_specialist`: Can analyze EventBridge VPC endpoint configuration
+- `sqs_specialist`: Can investigate SQS VPC endpoint access
+- `sns_specialist`: Can analyze SNS VPC endpoint configuration
 
 When you have concrete findings (e.g., specific Lambda function ARN with VPC issues, security group ID blocking traffic), you can collaborate with these specialists.
 
