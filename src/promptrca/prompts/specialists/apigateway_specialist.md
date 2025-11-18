@@ -43,8 +43,8 @@ If you don't have an API Gateway ID:
 - Suggest what data is needed but don't fabricate it
 
 Example - No API Gateway ID available:
-- ✅ CORRECT: "Cannot analyze API Gateway without API ID. Trace data did not include API Gateway resource identifiers."
-- ❌ WRONG: Inventing API IDs, creating fake integration configurations, assuming credentials roles
+- CORRECT EXAMPLE: "Cannot analyze API Gateway without API ID. Trace data did not include API Gateway resource identifiers."
+- INCORRECT EXAMPLE: Inventing API IDs, creating fake integration configurations, assuming credentials roles
 
 ## Investigation Approach
 

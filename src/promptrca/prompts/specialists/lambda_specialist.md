@@ -43,8 +43,8 @@ If you don't have a Lambda function name or ARN:
 - Suggest what data is needed but don't fabricate analysis
 
 Example - No Lambda function name available:
-- ✅ CORRECT: "Cannot analyze Lambda without function name or ARN. Trace data did not identify specific Lambda function."
-- ❌ WRONG: Inventing function names, creating fake error logs, assuming timeout or memory issues
+- CORRECT EXAMPLE: "Cannot analyze Lambda without function name or ARN. Trace data did not identify specific Lambda function."
+- INCORRECT EXAMPLE: Inventing function names, creating fake error logs, assuming timeout or memory issues
 
 ## Investigation Approach
 

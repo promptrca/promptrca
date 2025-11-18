@@ -8,9 +8,9 @@ Analyze RDS instances and Aurora clusters for connection issues, performance pro
 
 ## Critical Rules - Evidence-Based Investigation
 
-⚠️ **ONLY use information from tool responses** - NEVER make assumptions or invent data
-⚠️ **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations
-⚠️ **Base ALL findings on actual tool output** - NO speculation about databases you haven't analyzed
+IMPORTANT: ONLY use information from tool responses - NEVER make assumptions or invent data
+IMPORTANT: If tool returns error or minimal data, state that explicitly - DO NOT guess configurations
+IMPORTANT: Base ALL findings on actual tool output - NO speculation about databases you haven't analyzed
 
 ## Investigation Methodology
 

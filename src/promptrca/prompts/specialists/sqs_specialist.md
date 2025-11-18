@@ -43,8 +43,8 @@ If you don't have a queue name or URL:
 - Suggest what data is needed but don't fabricate it
 
 Example - No queue name available:
-- ✅ CORRECT: "Cannot analyze SQS without queue name or URL. Trace data did not identify specific SQS queue."
-- ❌ WRONG: Inventing queue names, creating fake DLQ metrics, assuming poison messages
+- CORRECT EXAMPLE: "Cannot analyze SQS without queue name or URL. Trace data did not identify specific SQS queue."
+- INCORRECT EXAMPLE: Inventing queue names, creating fake DLQ metrics, assuming poison messages
 
 ## Investigation Approach
 

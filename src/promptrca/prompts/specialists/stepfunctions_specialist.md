@@ -43,8 +43,8 @@ If you don't have an execution ARN:
 - Suggest what data is needed but don't fabricate it
 
 Example - No execution ARN available:
-- ✅ CORRECT: "Cannot analyze Step Functions without execution ARN. Trace data did not include execution details."
-- ❌ WRONG: Inventing execution ARNs, creating tables with fake execution status, error messages, timestamps
+- CORRECT EXAMPLE: "Cannot analyze Step Functions without execution ARN. Trace data did not include execution details."
+- INCORRECT EXAMPLE: Inventing execution ARNs, creating tables with fake execution status, error messages, timestamps
 
 ## Investigation Approach
 

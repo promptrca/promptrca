@@ -21,8 +21,8 @@ When your tool returns minimal data (e.g., just duration and HTTP 200):
 - Do NOT create elaborate tables or narratives from missing data
 
 Example - Tool returns `{"duration": 0.068, "http_status": 200}`:
-- ✅ CORRECT: "Trace shows 0.068s duration, HTTP 200. No error details or resource ARNs in trace data."
-- ❌ WRONG: Creating tables with invented ARNs, state machine names, error messages, execution details
+- CORRECT EXAMPLE: "Trace shows 0.068s duration, HTTP 200. No error details or resource ARNs in trace data."
+- INCORRECT EXAMPLE: Creating tables with invented ARNs, state machine names, error messages, execution details
 
 ## Your Expertise
 

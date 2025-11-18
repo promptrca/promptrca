@@ -43,8 +43,8 @@ If you don't have a bucket name or ARN:
 - Suggest what data is needed but don't fabricate it
 
 Example - No bucket name available:
-- ✅ CORRECT: "Cannot analyze S3 without bucket name. Trace data did not identify specific S3 bucket."
-- ❌ WRONG: Inventing bucket names, creating fake bucket policies, assuming public access issues
+- CORRECT EXAMPLE: "Cannot analyze S3 without bucket name. Trace data did not identify specific S3 bucket."
+- INCORRECT EXAMPLE: Inventing bucket names, creating fake bucket policies, assuming public access issues
 
 ## Investigation Approach
 

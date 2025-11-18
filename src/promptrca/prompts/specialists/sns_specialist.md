@@ -43,8 +43,8 @@ If you don't have a topic name or ARN:
 - Suggest what data is needed but don't fabricate it
 
 Example - No topic name available:
-- ✅ CORRECT: "Cannot analyze SNS without topic name or ARN. Trace data did not identify specific SNS topic."
-- ❌ WRONG: Inventing topic names, creating fake subscription lists, assuming delivery failures
+- CORRECT EXAMPLE: "Cannot analyze SNS without topic name or ARN. Trace data did not identify specific SNS topic."
+- INCORRECT EXAMPLE: Inventing topic names, creating fake subscription lists, assuming delivery failures
 
 ## Investigation Approach
 

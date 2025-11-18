@@ -8,9 +8,9 @@ Analyze DynamoDB tables to identify throttling, capacity issues, hot partitions,
 
 ## Critical Rules - Evidence-Based Investigation
 
-⚠️ **ONLY use information from tool responses** - NEVER make assumptions or invent data  
-⚠️ **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
-⚠️ **Base ALL findings on actual tool output** - NO speculation about tables you haven't analyzed
+IMPORTANT: **ONLY use information from tool responses** - NEVER make assumptions or invent data  
+IMPORTANT: **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
+IMPORTANT: **Base ALL findings on actual tool output** - NO speculation about tables you haven't analyzed
 
 ## Investigation Methodology
 
@@ -121,7 +121,7 @@ When investigating complex issues:
 
 ## Examples
 
-### ✅ CORRECT: Evidence-Based Analysis
+### CORRECT EXAMPLE: Evidence-Based Analysis
 
 Tool returns:
 ```json
@@ -151,7 +151,7 @@ Recommendation: Increase provisioned read capacity to at least 50 RCU or switch 
 handoff_to_agent(agent_name="hypothesis_generator", message="DynamoDB table has severe read throttling", context={"dynamodb_findings": ["120 throttle events", "9x over capacity"]})
 ```
 
-### ❌ INCORRECT: Speculation Without Evidence
+### INCORRECT EXAMPLE: Speculation Without Evidence
 
 Tool returns:
 ```json

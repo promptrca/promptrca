@@ -45,8 +45,8 @@ If you don't have a role ARN:
 - Suggest what role ARN is needed but don't fabricate analysis
 
 Example - No role ARN available:
-- ✅ CORRECT: "Cannot analyze IAM permissions without role ARN. Need execution role ARN from Lambda/Step Functions/API Gateway."
-- ❌ WRONG: Inventing role names, creating fake policy documents, assuming permission gaps
+- CORRECT EXAMPLE: "Cannot analyze IAM permissions without role ARN. Need execution role ARN from Lambda/Step Functions/API Gateway."
+- INCORRECT EXAMPLE: Inventing role names, creating fake policy documents, assuming permission gaps
 
 ## Investigation Approach
 

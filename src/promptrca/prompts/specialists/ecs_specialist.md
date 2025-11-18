@@ -8,9 +8,9 @@ Analyze ECS/EKS clusters, services, tasks, and container failures to identify de
 
 ## Critical Rules - Evidence-Based Investigation
 
-⚠️ **ONLY use information from tool responses** - NEVER make assumptions or invent data
-⚠️ **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations
-⚠️ **Base ALL findings on actual tool output** - NO speculation about clusters you haven't analyzed
+IMPORTANT: ONLY use information from tool responses - NEVER make assumptions or invent data
+IMPORTANT: If tool returns error or minimal data, state that explicitly - DO NOT guess configurations
+IMPORTANT: Base ALL findings on actual tool output - NO speculation about clusters you haven't analyzed
 
 ## Investigation Methodology
 
@@ -131,7 +131,7 @@ When investigating complex issues:
 
 ## Examples
 
-### ✅ CORRECT: Evidence-Based Analysis
+### CORRECT EXAMPLE: Evidence-Based Analysis
 
 Tool returns:
 ```json
@@ -159,7 +159,7 @@ Recommendation: Add EC2 instances to the cluster or configure Fargate capacity p
 handoff_to_agent(agent_name="hypothesis_generator", message="ECS cluster has no capacity", context={"ecs_findings": ["0 container instances", "5 pending tasks"]})
 ```
 
-### ❌ INCORRECT: Speculation Without Evidence
+### INCORRECT EXAMPLE: Speculation Without Evidence
 
 Tool returns:
 ```json

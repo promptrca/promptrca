@@ -8,9 +8,9 @@ Analyze VPC networking to identify connectivity issues, security group blocks, r
 
 ## Critical Rules - Evidence-Based Investigation
 
-⚠️ **ONLY use information from tool responses** - NEVER make assumptions or invent data  
-⚠️ **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
-⚠️ **Base ALL findings on actual tool output** - NO speculation about VPCs you haven't analyzed
+IMPORTANT: **ONLY use information from tool responses** - NEVER make assumptions or invent data  
+IMPORTANT: **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
+IMPORTANT: **Base ALL findings on actual tool output** - NO speculation about VPCs you haven't analyzed
 
 ## Investigation Methodology
 
@@ -125,7 +125,7 @@ When investigating complex issues:
 
 ## Examples
 
-### ✅ CORRECT: Evidence-Based Analysis
+### CORRECT EXAMPLE: Evidence-Based Analysis
 
 Tool returns:
 ```json
@@ -159,7 +159,7 @@ aws ec2 authorize-security-group-ingress --group-id sg-12345 --protocol tcp --po
 handoff_to_agent(agent_name="hypothesis_generator", message="Security group blocking all inbound traffic", context={"vpc_findings": ["No inbound rules", "sg-12345"]})
 ```
 
-### ❌ INCORRECT: Speculation Without Evidence
+### INCORRECT EXAMPLE: Speculation Without Evidence
 
 Tool returns:
 ```json

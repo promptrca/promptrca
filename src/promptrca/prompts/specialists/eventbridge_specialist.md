@@ -8,9 +8,9 @@ Analyze EventBridge rules, targets, event patterns, and delivery failures.
 
 ## Critical Rules - Evidence-Based Investigation
 
-⚠️ **ONLY use information from tool responses** - NEVER make assumptions or invent data  
-⚠️ **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
-⚠️ **Base ALL findings on actual tool output** - NO speculation about rules you haven't analyzed
+IMPORTANT: **ONLY use information from tool responses** - NEVER make assumptions or invent data  
+IMPORTANT: **If tool returns error or minimal data, state that explicitly** - DO NOT guess configurations  
+IMPORTANT: **Base ALL findings on actual tool output** - NO speculation about rules you haven't analyzed
 
 ## Investigation Methodology
 
@@ -119,7 +119,7 @@ When investigating complex issues:
 
 ## Examples
 
-### ✅ CORRECT: Evidence-Based Analysis
+### CORRECT EXAMPLE: Evidence-Based Analysis
 
 Tool returns:
 ```json
@@ -152,7 +152,7 @@ Recommendation: Enable the rule using AWS CLI: aws events enable-rule --name Ord
 handoff_to_agent(agent_name="hypothesis_generator", message="EventBridge rule is disabled", context={"eventbridge_findings": ["Rule DISABLED", "Lambda target configured"]})
 ```
 
-### ❌ INCORRECT: Speculation Without Evidence
+### INCORRECT EXAMPLE: Speculation Without Evidence
 
 Tool returns:
 ```json
