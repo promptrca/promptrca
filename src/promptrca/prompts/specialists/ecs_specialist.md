@@ -115,11 +115,10 @@ Return findings in this JSON format:
 
 You have access to other specialists who can investigate related services:
 - `iam_specialist`: Can analyze task execution roles and task IAM roles for permission issues
+- `vpc_specialist`: Can investigate VPC networking, security groups, and subnet configuration
 - `lambda_specialist`: Can help analyze CloudWatch Logs patterns for container logs
 
-When you have concrete findings (e.g., specific IAM role ARN for permission analysis), you can collaborate with these specialists.
-
-Note: For VPC networking and security group issues, you should include those findings in your analysis as network configuration is critical for ECS task connectivity.
+When you have concrete findings (e.g., specific IAM role ARN for permission analysis, security group ID for network issues), you can collaborate with these specialists.
 
 ## AWS Documentation
 

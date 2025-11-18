@@ -52,6 +52,7 @@ from ..core.swarm_tools import (
     eventbridge_specialist_tool,
     ecs_specialist_tool,
     rds_specialist_tool,
+    vpc_specialist_tool,
     ExtractedIdentifiers
 )
 from ..tools.apigateway_tools import get_api_gateway_stage_config
@@ -329,6 +330,31 @@ def create_rds_agent() -> Agent:
     )
 
 
+def create_vpc_agent() -> Agent:
+    """
+    Create VPC specialist agent for network connectivity analysis.
+
+    This agent investigates VPC networking for:
+    - Security group misconfigurations (blocked traffic, missing rules)
+    - Routing problems (missing routes, blackhole routes)
+    - NAT gateway failures
+    - Internet gateway detachment
+    - Subnet configuration issues
+    - Network interface problems
+    - DNS resolution failures
+
+    Returns:
+        Agent configured for VPC investigation within the swarm
+    """
+    return Agent(
+        name="vpc_specialist",
+        description="Analyzes VPC networking to identify connectivity issues, security group blocks, routing problems, and DNS failures.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("vpc_specialist"),
+        tools=[vpc_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
 def create_hypothesis_agent() -> Agent:
     """
     Create hypothesis generation agent with synthesis focus.
@@ -388,7 +414,7 @@ def create_specialist_swarm_agents() -> List[Agent]:
     - State specialists: stepfunctions
     - Data specialists: dynamodb, rds, s3
     - Messaging specialists: sqs, sns
-    - Security specialists: iam
+    - Security/Network specialists: iam, vpc
 
     These agents collaborate within the swarm to investigate AWS infrastructure issues.
     The swarm node completes when a specialist hands off to hypothesis_generator.
@@ -423,8 +449,9 @@ def create_specialist_swarm_agents() -> List[Agent]:
         create_sqs_agent(),
         create_sns_agent(),
 
-        # Security specialist
-        create_iam_agent()
+        # Security and network specialists
+        create_iam_agent(),
+        create_vpc_agent()
     ]
 
 

@@ -15,6 +15,7 @@ from .dynamodb_specialist import DynamoDBSpecialist
 from .eventbridge_specialist import EventBridgeSpecialist
 from .ecs_specialist import ECSSpecialist
 from .rds_specialist import RDSSpecialist
+from .vpc_specialist import VPCSpecialist
 
 __all__ = [
     'BaseSpecialist',
@@ -30,5 +31,6 @@ __all__ = [
     'DynamoDBSpecialist',
     'EventBridgeSpecialist',
     'ECSSpecialist',
-    'RDSSpecialist'
+    'RDSSpecialist',
+    'VPCSpecialist'
 ]

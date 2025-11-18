@@ -31,7 +31,7 @@ from ..specialists import (
     LambdaSpecialist, APIGatewaySpecialist,
     StepFunctionsSpecialist, TraceSpecialist,
     DynamoDBSpecialist, EventBridgeSpecialist,
-    ECSSpecialist, RDSSpecialist
+    ECSSpecialist, RDSSpecialist, VPCSpecialist
 )
 from ..utils import get_logger
 
@@ -65,7 +65,13 @@ class FactCollector:
             'rds_instance': RDSSpecialist(),
             'aurora': RDSSpecialist(),
             'aurora_cluster': RDSSpecialist(),
-            'database': RDSSpecialist()
+            'database': RDSSpecialist(),
+            'vpc': VPCSpecialist(),
+            'security_group': VPCSpecialist(),
+            'subnet': VPCSpecialist(),
+            'network_interface': VPCSpecialist(),
+            'nat_gateway': VPCSpecialist(),
+            'internet_gateway': VPCSpecialist()
         }
         self.trace_specialist = TraceSpecialist()
         self.max_facts_total = 50  # Global limit
