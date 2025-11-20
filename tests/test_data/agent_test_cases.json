@@ -1,0 +1,194 @@
+[
+  {
+    "id": "trace-1",
+    "query": "Analyze trace 1-67890123-abcdef1234567890abcdef12",
+    "expected_tool": "trace_specialist_tool",
+    "category": "tool_usage",
+    "agent": "trace_specialist",
+    "metadata": {
+      "trace_id": "1-67890123-abcdef1234567890abcdef12"
+    }
+  },
+  {
+    "id": "trace-2",
+    "query": "What services are involved in trace 1-67890124-abcdef1234567890abcdef13?",
+    "expected_tool": "trace_specialist_tool",
+    "category": "tool_usage",
+    "agent": "trace_specialist",
+    "metadata": {
+      "trace_id": "1-67890124-abcdef1234567890abcdef13"
+    }
+  },
+  {
+    "id": "trace-3",
+    "query": "Analyze these X-Ray traces: 1-67890123-abcdef1234567890abcdef12, 1-67890124-abcdef1234567890abcdef13",
+    "expected_tool": "trace_specialist_tool",
+    "category": "tool_usage",
+    "agent": "trace_specialist",
+    "metadata": {
+      "trace_ids": ["1-67890123-abcdef1234567890abcdef12", "1-67890124-abcdef1234567890abcdef13"]
+    }
+  },
+  {
+    "id": "trace-knowledge-1",
+    "query": "What is an X-Ray trace?",
+    "category": "knowledge_retrieval",
+    "agent": "trace_specialist",
+    "expected_content": "trace"
+  },
+  {
+    "id": "lambda-1",
+    "query": "Analyze Lambda function test-function for errors",
+    "expected_tool": "lambda_specialist_tool",
+    "category": "tool_usage",
+    "agent": "lambda_specialist",
+    "metadata": {
+      "function_name": "test-function"
+    }
+  },
+  {
+    "id": "lambda-2",
+    "query": "Check why my-function is timing out",
+    "expected_tool": "lambda_specialist_tool",
+    "category": "tool_usage",
+    "agent": "lambda_specialist",
+    "metadata": {
+      "function_name": "my-function"
+    }
+  },
+  {
+    "id": "lambda-3",
+    "query": "Investigate memory issues in function memory-test",
+    "expected_tool": "lambda_specialist_tool",
+    "category": "tool_usage",
+    "agent": "lambda_specialist",
+    "metadata": {
+      "function_name": "memory-test"
+    }
+  },
+  {
+    "id": "lambda-knowledge-1",
+    "query": "What causes Lambda timeouts?",
+    "category": "knowledge_retrieval",
+    "agent": "lambda_specialist",
+    "expected_content": "timeout"
+  },
+  {
+    "id": "lambda-reasoning-1",
+    "query": "My Lambda function is failing. It has 512MB memory and 30s timeout. What could be wrong?",
+    "category": "reasoning",
+    "agent": "lambda_specialist",
+    "expected_content": "memory"
+  },
+  {
+    "id": "apigateway-1",
+    "query": "Analyze API Gateway api-123 for integration errors",
+    "expected_tool": "apigateway_specialist_tool",
+    "category": "tool_usage",
+    "agent": "apigateway_specialist",
+    "metadata": {
+      "api_id": "api-123"
+    }
+  },
+  {
+    "id": "apigateway-2",
+    "query": "Check API Gateway test-api stage prod for authentication issues",
+    "expected_tool": "apigateway_specialist_tool",
+    "category": "tool_usage",
+    "agent": "apigateway_specialist",
+    "metadata": {
+      "api_id": "test-api",
+      "stage": "prod"
+    }
+  },
+  {
+    "id": "apigateway-3",
+    "query": "Why is my API Gateway returning 502 errors?",
+    "expected_tool": "apigateway_specialist_tool",
+    "category": "tool_usage",
+    "agent": "apigateway_specialist"
+  },
+  {
+    "id": "apigateway-knowledge-1",
+    "query": "What causes 502 errors in API Gateway?",
+    "category": "knowledge_retrieval",
+    "agent": "apigateway_specialist",
+    "expected_content": "502"
+  },
+  {
+    "id": "apigateway-reasoning-1",
+    "query": "My API Gateway is returning 502 errors. The backend Lambda has proper permissions. What else could be wrong?",
+    "category": "reasoning",
+    "agent": "apigateway_specialist",
+    "expected_content": "integration"
+  },
+  {
+    "id": "stepfunctions-1",
+    "query": "Analyze Step Functions execution arn:aws:states:us-east-1:123456789012:execution:test-state-machine:exec-123",
+    "expected_tool": "stepfunctions_specialist_tool",
+    "category": "tool_usage",
+    "agent": "stepfunctions_specialist",
+    "metadata": {
+      "execution_arn": "arn:aws:states:us-east-1:123456789012:execution:test-state-machine:exec-123"
+    }
+  },
+  {
+    "id": "stepfunctions-2",
+    "query": "Why did my Step Functions state machine fail?",
+    "expected_tool": "stepfunctions_specialist_tool",
+    "category": "tool_usage",
+    "agent": "stepfunctions_specialist"
+  },
+  {
+    "id": "stepfunctions-3",
+    "query": "Check state machine test-workflow for timeout issues",
+    "expected_tool": "stepfunctions_specialist_tool",
+    "category": "tool_usage",
+    "agent": "stepfunctions_specialist",
+    "metadata": {
+      "state_machine_name": "test-workflow"
+    }
+  },
+  {
+    "id": "stepfunctions-knowledge-1",
+    "query": "What are common Step Functions failure reasons?",
+    "category": "knowledge_retrieval",
+    "agent": "stepfunctions_specialist",
+    "expected_content": "failure"
+  },
+  {
+    "id": "stepfunctions-reasoning-1",
+    "query": "My Step Functions execution failed with TaskTimedOut. The Lambda timeout is 60s. What's the issue?",
+    "category": "reasoning",
+    "agent": "stepfunctions_specialist",
+    "expected_content": "timeout"
+  },
+  {
+    "id": "trace-edge-1",
+    "query": "Analyze trace invalid-trace-id",
+    "category": "edge_cases",
+    "agent": "trace_specialist",
+    "expected_tool": "trace_specialist_tool"
+  },
+  {
+    "id": "lambda-edge-1",
+    "query": "Analyze Lambda function non-existent-function",
+    "category": "edge_cases",
+    "agent": "lambda_specialist",
+    "expected_tool": "lambda_specialist_tool"
+  },
+  {
+    "id": "apigateway-edge-1",
+    "query": "Analyze API Gateway api-that-does-not-exist",
+    "category": "edge_cases",
+    "agent": "apigateway_specialist",
+    "expected_tool": "apigateway_specialist_tool"
+  },
+  {
+    "id": "stepfunctions-edge-1",
+    "query": "Analyze Step Functions execution arn:aws:states:us-east-1:123456789012:execution:invalid:exec-999",
+    "category": "edge_cases",
+    "agent": "stepfunctions_specialist",
+    "expected_tool": "stepfunctions_specialist_tool"
+  }
+]
