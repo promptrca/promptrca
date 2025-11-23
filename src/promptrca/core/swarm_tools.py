@@ -43,9 +43,11 @@ from ..models import Fact
 from ..context import set_aws_client, get_aws_client
 from ..utils.config import create_parser_model
 from ..specialists import (
-    LambdaSpecialist, APIGatewaySpecialist, 
+    LambdaSpecialist, APIGatewaySpecialist,
     StepFunctionsSpecialist, TraceSpecialist,
     IAMSpecialist, S3Specialist, SQSSpecialist, SNSSpecialist,
+    DynamoDBSpecialist, EventBridgeSpecialist,
+    ECSSpecialist, RDSSpecialist, VPCSpecialist,
     InvestigationContext
 )
 from ..utils import get_logger
@@ -158,6 +160,11 @@ RESOURCE_TYPE_IAM = 'iam'
 RESOURCE_TYPE_S3 = 's3'
 RESOURCE_TYPE_SQS = 'sqs'
 RESOURCE_TYPE_SNS = 'sns'
+RESOURCE_TYPE_DYNAMODB = 'dynamodb'
+RESOURCE_TYPE_EVENTBRIDGE = 'eventbridge'
+RESOURCE_TYPE_ECS = 'ecs'
+RESOURCE_TYPE_RDS = 'rds'
+RESOURCE_TYPE_VPC = 'vpc'
 
 # Specialist type constants
 SPECIALIST_TYPE_LAMBDA = 'lambda'
@@ -168,6 +175,11 @@ SPECIALIST_TYPE_IAM = 'iam'
 SPECIALIST_TYPE_S3 = 's3'
 SPECIALIST_TYPE_SQS = 'sqs'
 SPECIALIST_TYPE_SNS = 'sns'
+SPECIALIST_TYPE_DYNAMODB = 'dynamodb'
+SPECIALIST_TYPE_EVENTBRIDGE = 'eventbridge'
+SPECIALIST_TYPE_ECS = 'ecs'
+SPECIALIST_TYPE_RDS = 'rds'
+SPECIALIST_TYPE_VPC = 'vpc'
 
 
 # Input validation functions
@@ -1124,3 +1136,372 @@ def sns_specialist_tool(resource_data: str, investigation_context: str, tool_con
         # Catch-all for unexpected errors with graceful degradation
         logger.error(f"SNS specialist tool unexpected error: {e}")
         return _handle_specialist_failure(SPECIALIST_TYPE_SNS, e)
+
+@tool(context=True)
+def dynamodb_specialist_tool(resource_data: str, investigation_context: str, tool_context: ToolContext) -> dict:
+    """
+    Analyze DynamoDB table throttling, capacity issues, hot partitions, and stream problems using real AWS API calls.
+    
+    This tool uses the existing DynamoDBSpecialist class which makes real AWS API calls
+    through dynamodb_tools.py functions to analyze DynamoDB table configuration,
+    metrics, and stream issues.
+    
+    Args:
+        resource_data: JSON string containing DynamoDB resource information
+        investigation_context: JSON string with trace IDs, region, and context
+        tool_context: Strands ToolContext containing invocation_state with AWS client
+    
+    Returns:
+        ToolResult dictionary with status and content structure
+    """
+    try:
+        # Validate and parse input data with comprehensive error handling
+        try:
+            resource_data_parsed = _validate_json_input(resource_data, "resource_data")
+            resource_data_validated = _validate_resource_data(resource_data_parsed, RESOURCE_TYPE_DYNAMODB)
+        except (InputValidationError, ResourceDataError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_DYNAMODB)
+        
+        try:
+            context_data = _validate_json_input(investigation_context, "investigation_context")
+            context_data_validated = _validate_investigation_context(context_data)
+        except (InputValidationError, InvestigationContextError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_DYNAMODB)
+        
+        # Validate AWS client and test connectivity
+        try:
+            aws_client = tool_context.invocation_state.get('aws_client')
+            _validate_aws_client(aws_client)
+            set_aws_client(aws_client)
+        except (AWSClientContextError, AWSPermissionError, CrossAccountAccessError) as e:
+            return _create_error_response("aws_client", str(e), SPECIALIST_TYPE_DYNAMODB)
+        
+        # Extract DynamoDB resource using helper function
+        resource = _extract_resource_from_data(resource_data_validated, RESOURCE_TYPE_DYNAMODB, context_data_validated)
+        resource_name = resource.get('name', UNKNOWN_RESOURCE_NAME)
+        
+        # Create investigation context
+        context = InvestigationContext(
+            trace_ids=context_data_validated.get('trace_ids', []),
+            region=context_data_validated.get('region', DEFAULT_AWS_REGION),
+            parsed_inputs=context_data_validated.get('parsed_inputs')
+        )
+        
+        # Run specialist analysis with comprehensive error handling
+        try:
+            specialist = DynamoDBSpecialist()
+            facts = _run_specialist_analysis(specialist, resource, context)
+            
+            # Format results using helper function
+            results = _format_specialist_results(SPECIALIST_TYPE_DYNAMODB, resource_name, facts)
+            
+            return {
+                "status": "success",
+                "content": [
+                    {"json": results}
+                ]
+            }
+            
+        except SpecialistAnalysisError as e:
+            return _handle_specialist_failure(SPECIALIST_TYPE_DYNAMODB, e, resource_name)
+        
+    except Exception as e:
+        # Catch-all for unexpected errors with graceful degradation
+        logger.error(f"DynamoDB specialist tool unexpected error: {e}")
+        return _handle_specialist_failure(SPECIALIST_TYPE_DYNAMODB, e)
+
+
+@tool(context=True)
+def eventbridge_specialist_tool(resource_data: str, investigation_context: str, tool_context: ToolContext) -> dict:
+    """
+    Analyze EventBridge rule configuration, event patterns, target delivery, and invocation failures using real AWS API calls.
+    
+    This tool uses the existing EventBridgeSpecialist class which makes real AWS API calls
+    through eventbridge_tools.py functions to analyze EventBridge rule configuration,
+    targets, and metrics.
+    
+    Args:
+        resource_data: JSON string containing EventBridge resource information
+        investigation_context: JSON string with trace IDs, region, and context
+        tool_context: Strands ToolContext containing invocation_state with AWS client
+    
+    Returns:
+        ToolResult dictionary with status and content structure
+    """
+    try:
+        # Validate and parse input data with comprehensive error handling
+        try:
+            resource_data_parsed = _validate_json_input(resource_data, "resource_data")
+            resource_data_validated = _validate_resource_data(resource_data_parsed, RESOURCE_TYPE_EVENTBRIDGE)
+        except (InputValidationError, ResourceDataError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_EVENTBRIDGE)
+        
+        try:
+            context_data = _validate_json_input(investigation_context, "investigation_context")
+            context_data_validated = _validate_investigation_context(context_data)
+        except (InputValidationError, InvestigationContextError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_EVENTBRIDGE)
+        
+        # Validate AWS client and test connectivity
+        try:
+            aws_client = tool_context.invocation_state.get('aws_client')
+            _validate_aws_client(aws_client)
+            set_aws_client(aws_client)
+        except (AWSClientContextError, AWSPermissionError, CrossAccountAccessError) as e:
+            return _create_error_response("aws_client", str(e), SPECIALIST_TYPE_EVENTBRIDGE)
+        
+        # Extract EventBridge resource using helper function
+        resource = _extract_resource_from_data(resource_data_validated, RESOURCE_TYPE_EVENTBRIDGE, context_data_validated)
+        resource_name = resource.get('name', UNKNOWN_RESOURCE_NAME)
+        
+        # Create investigation context
+        context = InvestigationContext(
+            trace_ids=context_data_validated.get('trace_ids', []),
+            region=context_data_validated.get('region', DEFAULT_AWS_REGION),
+            parsed_inputs=context_data_validated.get('parsed_inputs')
+        )
+        
+        # Run specialist analysis with comprehensive error handling
+        try:
+            specialist = EventBridgeSpecialist()
+            facts = _run_specialist_analysis(specialist, resource, context)
+            
+            # Format results using helper function
+            results = _format_specialist_results(SPECIALIST_TYPE_EVENTBRIDGE, resource_name, facts)
+            
+            return {
+                "status": "success",
+                "content": [
+                    {"json": results}
+                ]
+            }
+            
+        except SpecialistAnalysisError as e:
+            return _handle_specialist_failure(SPECIALIST_TYPE_EVENTBRIDGE, e, resource_name)
+        
+    except Exception as e:
+        # Catch-all for unexpected errors with graceful degradation
+        logger.error(f"EventBridge specialist tool unexpected error: {e}")
+        return _handle_specialist_failure(SPECIALIST_TYPE_EVENTBRIDGE, e)
+
+
+@tool(context=True)
+def ecs_specialist_tool(resource_data: str, investigation_context: str, tool_context: ToolContext) -> dict:
+    """
+    Analyze ECS cluster capacity, service deployments, task placement failures, and container issues using real AWS API calls.
+    
+    This tool uses the existing ECSSpecialist class which makes real AWS API calls
+    through ecs_tools.py functions to analyze ECS cluster configuration,
+    service deployments, and task failures.
+    
+    Args:
+        resource_data: JSON string containing ECS resource information
+        investigation_context: JSON string with trace IDs, region, and context
+        tool_context: Strands ToolContext containing invocation_state with AWS client
+    
+    Returns:
+        ToolResult dictionary with status and content structure
+    """
+    try:
+        # Validate and parse input data with comprehensive error handling
+        try:
+            resource_data_parsed = _validate_json_input(resource_data, "resource_data")
+            resource_data_validated = _validate_resource_data(resource_data_parsed, RESOURCE_TYPE_ECS)
+        except (InputValidationError, ResourceDataError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_ECS)
+        
+        try:
+            context_data = _validate_json_input(investigation_context, "investigation_context")
+            context_data_validated = _validate_investigation_context(context_data)
+        except (InputValidationError, InvestigationContextError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_ECS)
+        
+        # Validate AWS client and test connectivity
+        try:
+            aws_client = tool_context.invocation_state.get('aws_client')
+            _validate_aws_client(aws_client)
+            set_aws_client(aws_client)
+        except (AWSClientContextError, AWSPermissionError, CrossAccountAccessError) as e:
+            return _create_error_response("aws_client", str(e), SPECIALIST_TYPE_ECS)
+        
+        # Extract ECS resource using helper function
+        resource = _extract_resource_from_data(resource_data_validated, RESOURCE_TYPE_ECS, context_data_validated)
+        resource_name = resource.get('name', UNKNOWN_RESOURCE_NAME)
+        
+        # Create investigation context
+        context = InvestigationContext(
+            trace_ids=context_data_validated.get('trace_ids', []),
+            region=context_data_validated.get('region', DEFAULT_AWS_REGION),
+            parsed_inputs=context_data_validated.get('parsed_inputs')
+        )
+        
+        # Run specialist analysis with comprehensive error handling
+        try:
+            specialist = ECSSpecialist()
+            facts = _run_specialist_analysis(specialist, resource, context)
+            
+            # Format results using helper function
+            results = _format_specialist_results(SPECIALIST_TYPE_ECS, resource_name, facts)
+            
+            return {
+                "status": "success",
+                "content": [
+                    {"json": results}
+                ]
+            }
+            
+        except SpecialistAnalysisError as e:
+            return _handle_specialist_failure(SPECIALIST_TYPE_ECS, e, resource_name)
+        
+    except Exception as e:
+        # Catch-all for unexpected errors with graceful degradation
+        logger.error(f"ECS specialist tool unexpected error: {e}")
+        return _handle_specialist_failure(SPECIALIST_TYPE_ECS, e)
+
+
+@tool(context=True)
+def rds_specialist_tool(resource_data: str, investigation_context: str, tool_context: ToolContext) -> dict:
+    """
+    Analyze RDS/Aurora instance health, connection pools, performance metrics, and replication lag using real AWS API calls.
+    
+    This tool uses the existing RDSSpecialist class which makes real AWS API calls
+    through rds_tools.py functions to analyze RDS instance configuration,
+    metrics, and performance issues.
+    
+    Args:
+        resource_data: JSON string containing RDS resource information
+        investigation_context: JSON string with trace IDs, region, and context
+        tool_context: Strands ToolContext containing invocation_state with AWS client
+    
+    Returns:
+        ToolResult dictionary with status and content structure
+    """
+    try:
+        # Validate and parse input data with comprehensive error handling
+        try:
+            resource_data_parsed = _validate_json_input(resource_data, "resource_data")
+            resource_data_validated = _validate_resource_data(resource_data_parsed, RESOURCE_TYPE_RDS)
+        except (InputValidationError, ResourceDataError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_RDS)
+        
+        try:
+            context_data = _validate_json_input(investigation_context, "investigation_context")
+            context_data_validated = _validate_investigation_context(context_data)
+        except (InputValidationError, InvestigationContextError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_RDS)
+        
+        # Validate AWS client and test connectivity
+        try:
+            aws_client = tool_context.invocation_state.get('aws_client')
+            _validate_aws_client(aws_client)
+            set_aws_client(aws_client)
+        except (AWSClientContextError, AWSPermissionError, CrossAccountAccessError) as e:
+            return _create_error_response("aws_client", str(e), SPECIALIST_TYPE_RDS)
+        
+        # Extract RDS resource using helper function
+        resource = _extract_resource_from_data(resource_data_validated, RESOURCE_TYPE_RDS, context_data_validated)
+        resource_name = resource.get('name', UNKNOWN_RESOURCE_NAME)
+        
+        # Create investigation context
+        context = InvestigationContext(
+            trace_ids=context_data_validated.get('trace_ids', []),
+            region=context_data_validated.get('region', DEFAULT_AWS_REGION),
+            parsed_inputs=context_data_validated.get('parsed_inputs')
+        )
+        
+        # Run specialist analysis with comprehensive error handling
+        try:
+            specialist = RDSSpecialist()
+            facts = _run_specialist_analysis(specialist, resource, context)
+            
+            # Format results using helper function
+            results = _format_specialist_results(SPECIALIST_TYPE_RDS, resource_name, facts)
+            
+            return {
+                "status": "success",
+                "content": [
+                    {"json": results}
+                ]
+            }
+            
+        except SpecialistAnalysisError as e:
+            return _handle_specialist_failure(SPECIALIST_TYPE_RDS, e, resource_name)
+        
+    except Exception as e:
+        # Catch-all for unexpected errors with graceful degradation
+        logger.error(f"RDS specialist tool unexpected error: {e}")
+        return _handle_specialist_failure(SPECIALIST_TYPE_RDS, e)
+
+
+@tool(context=True)
+def vpc_specialist_tool(resource_data: str, investigation_context: str, tool_context: ToolContext) -> dict:
+    """
+    Analyze VPC networking configuration, security groups, routing, and connectivity issues using real AWS API calls.
+
+    This tool uses the existing VPCSpecialist class which makes real AWS API calls
+    through vpc_tools.py functions to analyze VPC configuration, security groups,
+    subnets, NAT gateways, and internet gateways.
+
+    Args:
+        resource_data: JSON string containing VPC resource information (vpc, security_group, subnet, etc.)
+        investigation_context: JSON string with trace IDs, region, and context
+        tool_context: Strands ToolContext containing invocation_state with AWS client
+
+    Returns:
+        ToolResult dictionary with status and content structure
+    """
+    try:
+        # Validate and parse input data with comprehensive error handling
+        try:
+            resource_data_parsed = _validate_json_input(resource_data, "resource_data")
+            resource_data_validated = _validate_resource_data(resource_data_parsed, RESOURCE_TYPE_VPC)
+        except (InputValidationError, ResourceDataError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_VPC)
+
+        try:
+            context_data = _validate_json_input(investigation_context, "investigation_context")
+            context_data_validated = _validate_investigation_context(context_data)
+        except (InputValidationError, InvestigationContextError) as e:
+            return _create_error_response("input_validation", str(e), SPECIALIST_TYPE_VPC)
+
+        # Validate AWS client and test connectivity
+        try:
+            aws_client = tool_context.invocation_state.get('aws_client')
+            _validate_aws_client(aws_client)
+            set_aws_client(aws_client)
+        except (AWSClientContextError, AWSPermissionError, CrossAccountAccessError) as e:
+            return _create_error_response("aws_client", str(e), SPECIALIST_TYPE_VPC)
+
+        # Extract VPC resource using helper function
+        resource = _extract_resource_from_data(resource_data_validated, RESOURCE_TYPE_VPC, context_data_validated)
+        resource_name = resource.get('name', UNKNOWN_RESOURCE_NAME)
+
+        # Create investigation context
+        context = InvestigationContext(
+            trace_ids=context_data_validated.get('trace_ids', []),
+            region=context_data_validated.get('region', DEFAULT_AWS_REGION),
+            parsed_inputs=context_data_validated.get('parsed_inputs')
+        )
+
+        # Run specialist analysis with comprehensive error handling
+        try:
+            specialist = VPCSpecialist()
+            facts = _run_specialist_analysis(specialist, resource, context)
+
+            # Format results using helper function
+            results = _format_specialist_results(SPECIALIST_TYPE_VPC, resource_name, facts)
+
+            return {
+                "status": "success",
+                "content": [
+                    {"json": results}
+                ]
+            }
+
+        except SpecialistAnalysisError as e:
+            return _handle_specialist_failure(SPECIALIST_TYPE_VPC, e, resource_name)
+
+    except Exception as e:
+        # Catch-all for unexpected errors with graceful degradation
+        logger.error(f"VPC specialist tool unexpected error: {e}")
+        return _handle_specialist_failure(SPECIALIST_TYPE_VPC, e)

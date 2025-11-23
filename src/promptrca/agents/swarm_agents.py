@@ -48,6 +48,11 @@ from ..core.swarm_tools import (
     s3_specialist_tool,
     sqs_specialist_tool,
     sns_specialist_tool,
+    dynamodb_specialist_tool,
+    eventbridge_specialist_tool,
+    ecs_specialist_tool,
+    rds_specialist_tool,
+    vpc_specialist_tool,
     ExtractedIdentifiers
 )
 from ..tools.apigateway_tools import get_api_gateway_stage_config
@@ -217,10 +222,10 @@ def create_sqs_agent() -> Agent:
 def create_sns_agent() -> Agent:
     """
     Create SNS specialist agent with notification delivery focus.
-    
+
     This agent analyzes SNS topic configuration, subscriptions,
     and message delivery patterns.
-    
+
     Returns:
         Agent configured for SNS analysis with termination rules
     """
@@ -230,6 +235,123 @@ def create_sns_agent() -> Agent:
         model=create_sns_agent_model(),
         system_prompt=load_prompt("sns_specialist"),
         tools=[sns_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
+def create_dynamodb_agent() -> Agent:
+    """
+    Create DynamoDB specialist agent for table throttling and capacity analysis.
+
+    This agent investigates DynamoDB tables for:
+    - Throttling issues (read/write throttle events)
+    - Capacity problems (provisioned vs consumed)
+    - GSI/LSI configuration and status
+    - Hot partition detection
+    - DynamoDB Streams issues
+
+    Returns:
+        Agent configured for DynamoDB investigation within the swarm
+    """
+    return Agent(
+        name="dynamodb_specialist",
+        description="Analyzes DynamoDB tables for throttling, capacity issues, hot partitions, and stream problems.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("dynamodb_specialist"),
+        tools=[dynamodb_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
+def create_eventbridge_agent() -> Agent:
+    """
+    Create EventBridge specialist agent for event routing and delivery analysis.
+
+    This agent investigates EventBridge rules for:
+    - Rule state issues (enabled/disabled)
+    - Event pattern matching problems
+    - Target invocation failures
+    - Throttling and rate limiting
+    - Dead-letter queue configuration
+
+    Returns:
+        Agent configured for EventBridge investigation within the swarm
+    """
+    return Agent(
+        name="eventbridge_specialist",
+        description="Analyzes EventBridge rules, event patterns, target delivery, and invocation failures.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("eventbridge_specialist"),
+        tools=[eventbridge_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
+def create_ecs_agent() -> Agent:
+    """
+    Create ECS specialist agent for container orchestration analysis.
+
+    This agent investigates ECS clusters and services for:
+    - Container failures and exit codes
+    - Task placement failures (insufficient capacity)
+    - Service deployment issues (desired vs running count)
+    - Resource exhaustion (CPU/memory)
+    - Image pull failures and IAM issues
+
+    Returns:
+        Agent configured for ECS investigation within the swarm
+    """
+    return Agent(
+        name="ecs_specialist",
+        description="Analyzes ECS clusters, services, and tasks for container failures, placement issues, and resource constraints.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("ecs_specialist"),
+        tools=[ecs_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
+def create_rds_agent() -> Agent:
+    """
+    Create RDS specialist agent for database performance analysis.
+
+    This agent investigates RDS/Aurora instances for:
+    - Connection pool exhaustion
+    - High CPU/memory utilization
+    - Storage space issues
+    - Replication lag (read replicas)
+    - Performance degradation and slow queries
+
+    Returns:
+        Agent configured for RDS investigation within the swarm
+    """
+    return Agent(
+        name="rds_specialist",
+        description="Analyzes RDS/Aurora instances for connection issues, performance degradation, and resource constraints.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("rds_specialist"),
+        tools=[rds_specialist_tool, search_aws_documentation, read_aws_documentation]
+    )
+
+
+def create_vpc_agent() -> Agent:
+    """
+    Create VPC specialist agent for network connectivity analysis.
+
+    This agent investigates VPC networking for:
+    - Security group misconfigurations (blocked traffic, missing rules)
+    - Routing problems (missing routes, blackhole routes)
+    - NAT gateway failures
+    - Internet gateway detachment
+    - Subnet configuration issues
+    - Network interface problems
+    - DNS resolution failures
+
+    Returns:
+        Agent configured for VPC investigation within the swarm
+    """
+    return Agent(
+        name="vpc_specialist",
+        description="Analyzes VPC networking to identify connectivity issues, security group blocks, routing problems, and DNS failures.",
+        model=create_orchestrator_model(),
+        system_prompt=load_prompt("vpc_specialist"),
+        tools=[vpc_specialist_tool, search_aws_documentation, read_aws_documentation]
     )
 
 
@@ -283,33 +405,53 @@ def create_root_cause_agent() -> Agent:
 
 def create_specialist_swarm_agents() -> List[Agent]:
     """
-    Create only the specialist agents for the investigation swarm.
-    
-    Returns specialist agents that investigate AWS resources:
-    - Entry point agent (trace_specialist)
-    - Service specialist agents (lambda, apigateway, stepfunctions, iam, s3, sqs, sns)
-    
-    These agents autonomously investigate and hand off to each other based on findings.
-    Analysis agents (hypothesis_generator, root_cause_analyzer) are handled separately
-    in the Graph pattern.
-    
+    Create all specialist agents for the investigation swarm (collaborative node in graph).
+
+    The swarm is a single node in the graph where specialists autonomously hand off to each other:
+    - Entry point: trace_specialist (analyzes X-Ray traces)
+    - Compute specialists: lambda, ecs
+    - API specialists: apigateway, eventbridge
+    - State specialists: stepfunctions
+    - Data specialists: dynamodb, rds, s3
+    - Messaging specialists: sqs, sns
+    - Security/Network specialists: iam, vpc
+
+    These agents collaborate within the swarm to investigate AWS infrastructure issues.
+    The swarm node completes when a specialist hands off to hypothesis_generator.
+
+    Analysis agents (hypothesis_generator, root_cause_analyzer) are separate graph nodes
+    that receive the swarm's output.
+
     Returns:
-        List of specialist Agent instances for Swarm orchestration
+        List of all specialist Agent instances for Swarm collaborative investigation
     """
     return [
-        # Entry point agent
+        # Entry point agent (required - swarm starts here)
         create_trace_agent(),
-        
-        # Core service specialists
+
+        # Compute service specialists
         create_lambda_agent(),
+        create_ecs_agent(),
+
+        # API and event specialists
         create_apigateway_agent(),
+        create_eventbridge_agent(),
+
+        # State machine specialist
         create_stepfunctions_agent(),
-        
-        # Infrastructure specialists
-        create_iam_agent(),
+
+        # Data service specialists
+        create_dynamodb_agent(),
+        create_rds_agent(),
         create_s3_agent(),
+
+        # Messaging specialists
         create_sqs_agent(),
-        create_sns_agent()
+        create_sns_agent(),
+
+        # Security and network specialists
+        create_iam_agent(),
+        create_vpc_agent()
     ]
 
 

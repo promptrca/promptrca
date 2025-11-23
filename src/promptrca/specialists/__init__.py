@@ -11,10 +11,15 @@ from .iam_specialist import IAMSpecialist
 from .s3_specialist import S3Specialist
 from .sqs_specialist import SQSSpecialist
 from .sns_specialist import SNSSpecialist
+from .dynamodb_specialist import DynamoDBSpecialist
+from .eventbridge_specialist import EventBridgeSpecialist
+from .ecs_specialist import ECSSpecialist
+from .rds_specialist import RDSSpecialist
+from .vpc_specialist import VPCSpecialist
 
 __all__ = [
     'BaseSpecialist',
-    'InvestigationContext', 
+    'InvestigationContext',
     'LambdaSpecialist',
     'APIGatewaySpecialist',
     'StepFunctionsSpecialist',
@@ -22,5 +27,10 @@ __all__ = [
     'IAMSpecialist',
     'S3Specialist',
     'SQSSpecialist',
-    'SNSSpecialist'
+    'SNSSpecialist',
+    'DynamoDBSpecialist',
+    'EventBridgeSpecialist',
+    'ECSSpecialist',
+    'RDSSpecialist',
+    'VPCSpecialist'
 ]

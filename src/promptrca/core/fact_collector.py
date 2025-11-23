@@ -28,8 +28,10 @@ from typing import Dict, Any, List
 from ..models import Fact
 from ..specialists import (
     BaseSpecialist, InvestigationContext,
-    LambdaSpecialist, APIGatewaySpecialist, 
-    StepFunctionsSpecialist, TraceSpecialist
+    LambdaSpecialist, APIGatewaySpecialist,
+    StepFunctionsSpecialist, TraceSpecialist,
+    DynamoDBSpecialist, EventBridgeSpecialist,
+    ECSSpecialist, RDSSpecialist, VPCSpecialist
 )
 from ..utils import get_logger
 
@@ -48,7 +50,28 @@ class FactCollector:
         self.specialists = {
             'lambda': LambdaSpecialist(),
             'apigateway': APIGatewaySpecialist(),
-            'stepfunctions': StepFunctionsSpecialist()
+            'stepfunctions': StepFunctionsSpecialist(),
+            'dynamodb': DynamoDBSpecialist(),
+            'dynamodb_table': DynamoDBSpecialist(),
+            'eventbridge': EventBridgeSpecialist(),
+            'eventbridge_rule': EventBridgeSpecialist(),
+            'events': EventBridgeSpecialist(),
+            'events_rule': EventBridgeSpecialist(),
+            'ecs': ECSSpecialist(),
+            'ecs_cluster': ECSSpecialist(),
+            'ecs_service': ECSSpecialist(),
+            'ecs_task': ECSSpecialist(),
+            'rds': RDSSpecialist(),
+            'rds_instance': RDSSpecialist(),
+            'aurora': RDSSpecialist(),
+            'aurora_cluster': RDSSpecialist(),
+            'database': RDSSpecialist(),
+            'vpc': VPCSpecialist(),
+            'security_group': VPCSpecialist(),
+            'subnet': VPCSpecialist(),
+            'network_interface': VPCSpecialist(),
+            'nat_gateway': VPCSpecialist(),
+            'internet_gateway': VPCSpecialist()
         }
         self.trace_specialist = TraceSpecialist()
         self.max_facts_total = 50  # Global limit
