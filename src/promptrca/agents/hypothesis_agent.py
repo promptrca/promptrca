@@ -134,8 +134,9 @@ Then, provide structured JSON output.
 JSON: [{{"type": "...", "description": "...", "confidence": 0.0-1.0, "evidence": ["fact1", "fact2"]}}]"""
 
         try:
-            # Use Strands agent to generate hypotheses (call agent directly)
-            response = self.strands_agent(prompt)
+            # Use Strands agent to generate hypotheses with retry
+            from ..utils.agent_retry import invoke_agent_with_retry
+            response = invoke_agent_with_retry(self.strands_agent, prompt)
 
 
             # Parse response

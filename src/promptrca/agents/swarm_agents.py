@@ -253,7 +253,7 @@ def create_hypothesis_agent() -> Agent:
         ),
         model=create_hypothesis_agent_model(),
         system_prompt=load_prompt("hypothesis_generator"),
-        tools=[]  # No tools needed - receives findings from other agents
+        tools=[search_aws_documentation, read_aws_documentation]  # Allow access to AWS docs for better analysis
     )
 
 
@@ -277,7 +277,7 @@ def create_root_cause_agent() -> Agent:
         ),
         model=create_root_cause_agent_model(),
         system_prompt=load_prompt("root_cause_analyzer"),
-        tools=[]  # No tools needed - analyzes hypotheses and provides final results
+        tools=[search_aws_documentation, read_aws_documentation]  # Allow access to AWS docs for remediation advice
     )
 
 
@@ -346,7 +346,7 @@ def create_root_cause_agent_standalone() -> Agent:
         ),
         model=create_root_cause_agent_model(),
         system_prompt=load_prompt("root_cause_analyzer"),
-        tools=[],  # No tools needed - analyzes hypotheses
+        tools=[search_aws_documentation, read_aws_documentation],  # Allow access to AWS docs for remediation advice
         trace_attributes={
             "service.name": "promptrca-rootcause-agent",
             "service.version": "1.0.0",

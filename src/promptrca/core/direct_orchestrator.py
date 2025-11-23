@@ -572,7 +572,7 @@ class DirectInvocationOrchestrator:
         This is 3-5x faster than sequential invocation.
         """
         async def _invoke_single_specialist(invocation: SpecialistInvocation):
-            """Invoke a single specialist agent."""
+            """Invoke a single specialist agent with retry logic."""
             try:
                 logger.info(f"   → Invoking {invocation.specialist_type} specialist...")
 
@@ -585,9 +585,15 @@ class DirectInvocationOrchestrator:
                     invocation.context
                 )
 
-                # Run specialist (in thread pool since Strands is sync)
+                # Run specialist with retry (in thread pool since Strands is sync)
+                from ..utils.agent_retry import invoke_agent_with_retry
                 loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, specialist, prompt)
+                result = await loop.run_in_executor(
+                    None,
+                    invoke_agent_with_retry,
+                    specialist,
+                    prompt
+                )
 
                 invocation.result = result
                 logger.info(f"   ✓ {invocation.specialist_type} specialist completed")

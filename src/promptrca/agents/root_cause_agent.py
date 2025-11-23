@@ -167,8 +167,9 @@ Provide your analysis wrapped between <ANALYSIS_START> and <ANALYSIS_END> tags, 
 JSON: {{"primary_root_cause_index": 0, "contributing_factor_indices": [1,2], "analysis_summary": "..."}}"""
 
         try:
-            # Use Strands agent
-            response = self.strands_agent(prompt)
+            # Use Strands agent with retry
+            from ..utils.agent_retry import invoke_agent_with_retry
+            response = invoke_agent_with_retry(self.strands_agent, prompt)
 
 
             # Parse response

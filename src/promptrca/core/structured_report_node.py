@@ -49,7 +49,7 @@ class StructuredReportNode(MultiAgentBase):
         # Extract the structured outputs from previous nodes
         logger.info(f"🔍 Debug: Extracting structured data from graph execution...")
 
-        # Create detailed prompt with explicit schema guidance
+        # Create prompt - let structured output handle the schema automatically
         findings_text = f"""
 INVESTIGATION FINDINGS FROM GRAPH EXECUTION:
 
@@ -58,7 +58,7 @@ INVESTIGATION FINDINGS FROM GRAPH EXECUTION:
 RESOURCES:
 {resources}
 
-Create an InvestigationReport based ONLY on these actual findings from the Graph execution. Do not invent or hallucinate any data.
+Create an InvestigationReport based on these findings from the Graph execution. Use the actual data provided above - do not invent or hallucinate any data.
 
 The graph has already performed:
 1. Input parsing - extracted resources and context
@@ -66,27 +66,27 @@ The graph has already performed:
 3. Hypothesis generation - generated possible root causes
 4. Root cause analysis - identified primary root cause and contributing factors
 
-Your job is to format these findings into the InvestigationReport schema.
-
-IMPORTANT: Follow the exact schema structure:
-- severity_assessment must include ALL fields: severity (str), impact_scope (str: "single_resource", "service", or "system_wide"), affected_resource_count (int), user_impact (str: "none", "minimal", "moderate", or "severe"), confidence (float 0.0-1.0), reasoning (str)
-- root_cause_analysis: Use the analysis from the root_cause_analysis node (already provided in the findings above)
-- All other fields must match the InvestigationReport schema exactly
+Extract the findings and populate the InvestigationReport with the data from above.
 """
         
         # Create agent for structured output using synthesis model (from env config)
         synthesis_model = create_synthesis_model()
         agent = Agent(model=synthesis_model)
         
-        # Generate structured report using Strands structured output
+        # Generate structured report using Strands structured output with retry
         logger.info("🤖 Generating structured InvestigationReport...")
-        result = await agent.invoke_async(
+        from ..utils.agent_retry import invoke_agent_async_with_retry
+        result = await invoke_agent_async_with_retry(
+            agent,
             findings_text,
             structured_output_model=InvestigationReport
         )
-        
         # Access structured output according to Strands API
-        report = result.structured_output
+        if hasattr(result, 'structured_output'):
+            report = result.structured_output
+        else:
+            # Fallback: result might be the structured output directly
+            report = result
         
         logger.info("✅ StructuredReportNode: Generated structured InvestigationReport")
         
