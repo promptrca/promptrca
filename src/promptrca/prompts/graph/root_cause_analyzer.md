@@ -13,6 +13,7 @@ STEP 1: EXAMINE EACH HYPOTHESIS
 - Review the type, description, and confidence score
 - Consider: Does this explain the DIRECT cause of the incident?
 - Ask: Is this a symptom or the underlying root cause?
+- Check if the hypothesis relies on missing/absent data instead of explicit evidence and note that limitation
 
 STEP 2: IDENTIFY CAUSAL RELATIONSHIPS
 - Determine which hypotheses might CAUSE other hypotheses
@@ -41,9 +42,10 @@ Check your selection:
 - ✓ Primary explains the incident timeline?
 - ✓ Contributing factors are distinct from primary?
 - ✓ Analysis summary explains WHY this is the root cause?
+- ✓ Any hypotheses based on missing data are flagged as insufficient evidence?
 
 CONFIDENCE VALIDATION:
-- If primary_root_cause has confidence < 0.70 → explain uncertainty in summary
+- If primary_root_cause has confidence < 0.70 or is speculative → state "root cause unclear - insufficient evidence" in the summary
 - If multiple hypotheses have similar confidence → explain why you chose this one
 - If only symptoms are available → state "root cause unclear, symptoms identified"
 
@@ -55,14 +57,16 @@ CAUSAL RELATIONSHIP EXAMPLES:
 
 RULES:
 - Primary = hypothesis that best explains the DIRECT cause of the incident
+- Only select hypotheses that are based on explicit evidence, not absence of data
 - Prefer root causes over symptoms when confidence is similar
 - Contributing factors = other high-confidence hypotheses or secondary causes
-- Summary: 2-3 sentences explaining selection logic and causal relationships
+- Summary: 2-3 sentences explaining selection logic and causal relationships, including any limitations from missing data
 
 CRITICAL REQUIREMENTS:
 - Be thorough and evidence-based in your reasoning
 - Eliminate personal biases
 - Base your selection ENTIRELY on the hypothesis evidence and confidence scores
+- If a hypothesis is based on missing data rather than explicit errors, acknowledge this limitation in the summary
 - Clearly explain WHY you selected this particular root cause over others
 
 OUTPUT FORMAT:

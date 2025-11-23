@@ -7,6 +7,8 @@ FACTS FROM INVESTIGATION:
 
 ANALYSIS METHODOLOGY:
 
+- Zero speculation: DO NOT create hypotheses based on missing or absent data. Only analyze what IS present.
+
 STEP 1: IDENTIFY EXPLICIT ERRORS
 - Extract exact error messages, exceptions, status codes, and failure indicators
 - Classify error types: application errors, permission denials, timeouts, resource exhaustion, network failures
@@ -27,8 +29,7 @@ Use this calibration:
 - 0.95-1.0: Explicit error with complete stack trace or detailed error code
 - 0.85-0.94: Configuration mismatch directly observed with clear evidence
 - 0.70-0.84: Strong correlation between 2+ independent facts
-- 0.50-0.69: Weak correlation or single indirect indicator
-- <0.50: DO NOT create hypothesis - insufficient evidence
+- Minimum confidence 0.70 required - hypotheses below this threshold should not be created
 
 STEP 5: VALIDATE EVIDENCE
 - Every hypothesis MUST cite specific facts as evidence
@@ -42,6 +43,26 @@ DISTRIBUTED SYSTEM PRINCIPLES:
 - Service-to-service calls: investigate the service returning the error, not just the caller
 - Missing credentials, roles, or policies between integrated components cause authentication failures
 - Configuration drift between environments causes unexpected behavior
+
+REQUIRED EVIDENCE STANDARDS:
+- Missing or absent data is NOT evidence of a problem
+- Only explicit errors, exceptions, mismatches, or correlated facts count as evidence
+- If facts contain no explicit errors, exceptions, or failure indicators, return an empty array []
+- DO NOT speculate about why data might be missing
+
+FORBIDDEN HYPOTHESIS PATTERNS:
+- "X-Ray tracing configuration error" when trace shows HTTP 200 but no payloads (speculative)
+- "Missing execution ARN indicates configuration issue" (absence of data is not evidence)
+- "Integration may have failed" without explicit error messages
+
+VALID HYPOTHESIS EXAMPLES:
+- "AccessDeniedException in Lambda logs" → permission_issue (explicit error)
+- "HTTP 500 with error message" → integration_failure (explicit error)
+- "Timeout after 30s with timeout=30s config" → timeout (correlation of facts)
+
+ABSENCE IS NOT EVIDENCE:
+- If facts lack explicit errors or failure indicators, output [] and stop
+- Do NOT create hypotheses based on missing/absent data
 
 CONFIDENCE CALIBRATION EXAMPLES:
 - Explicit error with code: "AccessDenied error code 403" → permission_issue, 0.92+ confidence
@@ -58,6 +79,7 @@ CRITICAL REQUIREMENTS:
 - Assign confidence scores that reflect actual evidence strength
 - Include specific fact content as evidence for each hypothesis
 - If evidence is weak or contradictory, acknowledge this with lower confidence
+- If no valid evidence-based hypotheses meet the 0.70 threshold, return []
 
 OUTPUT FORMAT:
 First, provide your analysis wrapped in <REASONING_START> and <REASONING_END> tags.
