@@ -172,16 +172,17 @@ class SeverityAgent:
         """Use AI to assess severity with detailed reasoning."""
         logger.info("Assessing severity using AI")
 
-        # Try AI assessment first
-        if self.strands_agent:
-            try:
-                return self._assess_severity_with_ai(facts, affected_resources, hypotheses, heuristic_score)
-            except Exception as e:
-                logger.error(f"AI severity assessment failed: {e}, using fallback")
-                return self._assess_severity_fallback(heuristic_score)
-        else:
-            logger.warning("No Strands agent available, using fallback severity assessment")
-            return self._assess_severity_fallback(heuristic_score)
+        # AI assessment (required)
+        if not self.strands_agent:
+            error_msg = "No Strands agent available - severity assessment requires AI agent"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        try:
+            return self._assess_severity_with_ai(facts, affected_resources, hypotheses, heuristic_score)
+        except Exception as e:
+            logger.error(f"AI severity assessment failed: {e}")
+            raise
 
     def _assess_severity_with_ai(
         self,
@@ -255,61 +256,3 @@ class SeverityAgent:
 
         json_str = response_str[start_idx:end_idx]
         return json.loads(json_str)
-
-    def _assess_severity_fallback(self, heuristic_score: int) -> Dict[str, Any]:
-        """Fallback severity assessment based on heuristic score."""
-        logger.info("📊 Using fallback severity assessment")
-
-        # Map heuristic score to severity
-        if heuristic_score >= 15:
-            severity = "critical"
-            confidence = 0.8
-            reasoning = "High heuristic score indicates critical severity"
-        elif heuristic_score >= 10:
-            severity = "high"
-            confidence = 0.75
-            reasoning = "Elevated heuristic score indicates high severity"
-        elif heuristic_score >= 5:
-            severity = "medium"
-            confidence = 0.7
-            reasoning = "Moderate heuristic score indicates medium severity"
-        else:
-            severity = "low"
-            confidence = 0.65
-            reasoning = "Low heuristic score indicates low severity"
-
-        return {
-            "severity": severity,
-            "confidence": confidence,
-            "reasoning": reasoning
-        }
-    
-    def _build_severity_prompt(self, facts: List[Fact], affected_resources: List[AffectedResource], hypotheses: List[Hypothesis], severity_score: int) -> str:
-        """Build a prompt for AI severity analysis."""
-        
-        facts_text = "\n".join([f"- {fact.content}" for fact in facts])
-        resources_text = "\n".join([f"- {resource.resource_type}: {resource.resource_id}" for resource in affected_resources])
-        hypotheses_text = "\n".join([f"- {hyp.type}: {hyp.description} (confidence: {hyp.confidence})" for hyp in hypotheses])
-        
-        prompt = f"""
-Analyze the following incident and determine its severity level.
-
-FACTS:
-{facts_text}
-
-AFFECTED RESOURCES:
-{resources_text}
-
-HYPOTHESES:
-{hypotheses_text}
-
-HEURISTIC SEVERITY SCORE: {severity_score}/20
-
-Please provide a JSON response with:
-{{
-    "severity": "low|medium|high|critical",
-    "confidence": 0.0-1.0,
-    "reasoning": "Detailed explanation of why this severity level was chosen..."
-}}
-"""
-        return prompt

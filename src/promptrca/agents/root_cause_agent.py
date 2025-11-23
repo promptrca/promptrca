@@ -55,17 +55,32 @@ class RootCauseAgent:
 
         # Sort hypotheses by confidence
         sorted_hyps = sorted(hypotheses, key=lambda h: h.confidence, reverse=True)
+        MIN_CONFIDENCE = 0.70
+        high_confidence_hyps = [h for h in sorted_hyps if h.confidence >= MIN_CONFIDENCE]
 
-        # Try AI classification first
-        if self.strands_agent:
-            try:
-                analysis = self._classify_hypotheses_with_ai(sorted_hyps, facts)
-            except Exception as e:
-                logger.error(f"AI root cause analysis failed: {e}, using fallback")
-                analysis = self._classify_hypotheses_fallback(sorted_hyps)
-        else:
-            logger.warning("No Strands agent available, using fallback classification")
-            analysis = self._classify_hypotheses_fallback(sorted_hyps)
+        if not high_confidence_hyps:
+            logger.warning("No hypotheses meet minimum confidence threshold; root cause unclear")
+            return RootCauseAnalysis(
+                primary_root_cause=None,
+                contributing_factors=[],
+                confidence_score=0.0,
+                analysis_summary="root cause unclear - insufficient evidence (no hypotheses with confidence ≥ 0.70)"
+            )
+
+        if len(high_confidence_hyps) < len(sorted_hyps):
+            logger.info(f"Filtered out {len(sorted_hyps) - len(high_confidence_hyps)} low-confidence hypotheses before analysis")
+
+        # AI classification (required)
+        if not self.strands_agent:
+            error_msg = "No Strands agent available - root cause analysis requires AI agent"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        try:
+            analysis = self._classify_hypotheses_with_ai(high_confidence_hyps, facts)
+        except Exception as e:
+            logger.error(f"AI root cause analysis failed: {e}")
+            raise
 
         return RootCauseAnalysis(
             primary_root_cause=analysis['primary_root_cause'],
@@ -77,6 +92,15 @@ class RootCauseAgent:
     def _classify_hypotheses_with_ai(self, hypotheses: List[Hypothesis], facts: List[Fact]) -> Dict[str, Any]:
         """Use AI to classify hypotheses into primary root cause vs contributing factors."""
         logger.info("🤖 Using AI for root cause classification")
+
+        if not hypotheses:
+            logger.warning("No hypotheses provided to AI classifier after filtering; marking root cause unclear")
+            return {
+                "primary_root_cause": None,
+                "contributing_factors": [],
+                "confidence_score": 0.0,
+                "analysis_summary": "root cause unclear - insufficient evidence"
+            }
 
         # Build context for AI analysis
         hypothesis_data = []
@@ -94,7 +118,9 @@ class RootCauseAgent:
 
         hypotheses_list = []
         for i, h in enumerate(hypothesis_data):
-            hypotheses_list.append(f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f})")
+            hypotheses_list.append(
+                f"{i+1}. [{h['type']}] {h['description']} (confidence: {h['confidence']:.2f}, evidence_count: {h['evidence_count']})"
+            )
         
         # Load prompt template and format with hypotheses
         from ..utils.prompt_loader import load_prompt
@@ -157,129 +183,3 @@ class RootCauseAgent:
 
         json_str = response_str[start_idx:end_idx]
         return json.loads(json_str)
-
-    def _classify_hypotheses_fallback(self, hypotheses: List[Hypothesis]) -> Dict[str, Any]:
-        """Fallback classification with symptom vs root cause detection."""
-        logger.info("📊 Using fallback root cause classification")
-
-        # Define symptom types (these are effects, not causes)
-        SYMPTOM_TYPES = {"timeout", "error_rate", "throttling", "high_latency", "resource_constraint"}
-
-        # Define root cause types (these are actual causes)
-        ROOT_CAUSE_TYPES = {"permission_issue", "configuration_error", "code_bug",
-                            "infrastructure_issue", "integration_failure", "network_issue"}
-
-        # Separate hypotheses into root causes and symptoms
-        root_causes = [h for h in hypotheses if h.type in ROOT_CAUSE_TYPES]
-        symptoms = [h for h in hypotheses if h.type in SYMPTOM_TYPES]
-        unknown = [h for h in hypotheses if h.type not in ROOT_CAUSE_TYPES and h.type not in SYMPTOM_TYPES]
-
-        # Select primary root cause
-        primary_root_cause = None
-        contributing_factors = []
-
-        if root_causes:
-            # Pick highest confidence root cause
-            primary_root_cause = max(root_causes, key=lambda h: h.confidence)
-
-            # Contributing factors: other root causes + top symptoms
-            other_root_causes = [h for h in root_causes if h != primary_root_cause]
-            contributing_factors = other_root_causes[:2] + symptoms[:1]
-
-            summary = (f"Identified {primary_root_cause.type} as primary root cause "
-                      f"(confidence: {primary_root_cause.confidence:.2f})")
-            if symptoms:
-                symptom_types = ", ".join([s.type for s in symptoms[:3]])
-                summary += f". Observed symptoms: {symptom_types}"
-
-        elif symptoms:
-            # Only symptoms available - pick highest confidence but reduce confidence
-            primary_root_cause = max(symptoms, key=lambda h: h.confidence)
-            original_confidence = primary_root_cause.confidence
-
-            # Reduce confidence by 30% since we only have symptoms, not root causes
-            # Create a new Hypothesis object with adjusted confidence
-            from ..models import Hypothesis as HypothesisModel
-            primary_root_cause = HypothesisModel(
-                type=primary_root_cause.type,
-                description=primary_root_cause.description + " (symptom - root cause unclear)",
-                confidence=primary_root_cause.confidence * 0.7,
-                evidence=primary_root_cause.evidence
-            )
-
-            contributing_factors = [s for s in symptoms if s != primary_root_cause][:2]
-            summary = (f"Only symptoms identified, no clear root cause. "
-                      f"Primary symptom: {primary_root_cause.type} "
-                      f"(adjusted confidence: {primary_root_cause.confidence:.2f}, "
-                      f"original: {original_confidence:.2f})")
-
-        elif unknown:
-            # Unknown hypothesis types
-            primary_root_cause = max(unknown, key=lambda h: h.confidence)
-            contributing_factors = [h for h in unknown if h != primary_root_cause][:2]
-            summary = f"Identified {primary_root_cause.type} as potential root cause (type classification unclear)"
-
-        else:
-            # No hypotheses at all
-            summary = "No hypotheses available for root cause analysis"
-
-        return {
-            "primary_root_cause": primary_root_cause,
-            "contributing_factors": contributing_factors,
-            "confidence_score": primary_root_cause.confidence if primary_root_cause else 0.0,
-            "analysis_summary": summary
-        }
-    
-    def _build_root_cause_prompt(self, facts: List[Fact], hypotheses: List[Hypothesis]) -> str:
-        """Build a prompt for AI root cause analysis."""
-        
-        facts_text = "\n".join([f"- {fact.content}" for fact in facts])
-        hypotheses_text = "\n".join([f"{i+1}. {hyp.type}: {hyp.description} (confidence: {hyp.confidence})" for i, hyp in enumerate(hypotheses)])
-        
-        prompt = f"""
-Analyze the following facts and hypotheses to identify the primary root cause and contributing factors.
-
-FACTS:
-{facts_text}
-
-HYPOTHESES (numbered for reference):
-{hypotheses_text}
-
-Please provide a JSON response with:
-{{
-    "primary_root_cause_index": 0,
-    "contributing_factor_indices": [1, 2],
-    "analysis_summary": "Clear explanation of why this is the root cause and how contributing factors relate..."
-}}
-
-Use the hypothesis numbers (0-based indexing) for the indices.
-"""
-        return prompt
-    
-    def _analyze_causal_relationships(self, hypotheses: List[Hypothesis]) -> Dict[str, List[int]]:
-        """Analyze potential causal relationships between hypotheses."""
-        
-        # Define common causal patterns
-        causal_patterns = {
-            "iam_permission": ["lambda_invocation", "stepfunctions_execution", "apigateway_integration"],
-            "lambda_invocation": ["lambda_code", "lambda_config", "lambda_timeout"],
-            "stepfunctions_execution": ["lambda_invocation", "iam_permission", "stepfunctions_config"],
-            "apigateway_integration": ["iam_permission", "stepfunctions_execution", "lambda_invocation"],
-            "lambda_code": ["lambda_invocation", "lambda_timeout"],
-            "lambda_config": ["lambda_invocation", "lambda_timeout", "lambda_memory"],
-            "network": ["lambda_invocation", "stepfunctions_execution", "apigateway_integration"]
-        }
-        
-        relationships = {"causes": [], "effects": []}
-        
-        for i, hyp1 in enumerate(hypotheses):
-            for j, hyp2 in enumerate(hypotheses):
-                if i != j:
-                    # Check if hyp1 could cause hyp2
-                    if hyp1.type in causal_patterns and hyp2.type in causal_patterns[hyp1.type]:
-                        relationships["causes"].append((i, j))
-                    # Check if hyp2 could cause hyp1
-                    elif hyp2.type in causal_patterns and hyp1.type in causal_patterns[hyp2.type]:
-                        relationships["effects"].append((i, j))
-        
-        return relationships

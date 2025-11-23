@@ -21,6 +21,7 @@ Contact: info@promptrca.com
 """
 
 import json
+import re
 from typing import List, Optional
 from ..models import Fact, Hypothesis
 from ..utils import get_logger
@@ -51,19 +52,25 @@ class HypothesisAgent:
 
         # AI-powered hypothesis generation (required)
         if not self.strands_agent:
-            logger.error("No Strands agent available - cannot generate hypotheses")
-            return []
+            error_msg = "No Strands agent available - hypothesis generation requires AI agent"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
 
         try:
             base_hypotheses = self._generate_hypotheses_with_ai(facts)
             return base_hypotheses
         except Exception as e:
             logger.error(f"AI hypothesis generation failed: {e}")
-            return []
+            raise
 
     def _generate_hypotheses_with_ai(self, facts: List[Fact]) -> List[Hypothesis]:
         """Generate hypotheses using Strands AI agent."""
         logger.info("🤖 Using AI for hypothesis generation")
+
+        evidence_facts = [f for f in facts if self._has_explicit_evidence(f)]
+        if not evidence_facts:
+            logger.warning("No explicit errors/failure indicators in facts; returning empty hypotheses per prompt guard")
+            return []
 
         # Build the prompt for AI
         facts_text = "\n".join([f"- [{f.source}] {f.content} (confidence: {f.confidence:.2f})" for f in facts])
@@ -83,16 +90,25 @@ class HypothesisAgent:
 
             # Convert to Hypothesis objects with evidence validation
             hypotheses = []
+            MIN_CONFIDENCE = 0.70
             for h_data in hypotheses_data:
                 evidence = h_data.get('evidence', [])
                 if not evidence or len(evidence) == 0:
                     logger.warning(f"Dropping hypothesis without evidence: {h_data.get('description')}")
                     continue
+                if all(self._evidence_is_absence(item) for item in evidence):
+                    logger.warning(f"Dropping hypothesis based solely on missing/absent data: {h_data.get('description')}")
+                    continue
+
+                confidence = float(h_data.get('confidence', 0.5))
+                if confidence < MIN_CONFIDENCE:
+                    logger.info(f"Dropping low-confidence hypothesis ({confidence:.2f} < {MIN_CONFIDENCE:.2f}): {h_data.get('description')}")
+                    continue
                 
                 hypothesis = Hypothesis(
                     type=h_data.get('type', 'unknown'),
                     description=h_data.get('description', ''),
-                    confidence=float(h_data.get('confidence', 0.5)),
+                    confidence=confidence,
                     evidence=evidence
                 )
                 hypotheses.append(hypothesis)
@@ -125,172 +141,24 @@ class HypothesisAgent:
         json_str = response_str[start_idx:end_idx]
         return json.loads(json_str)
 
-    def _generate_hypotheses_heuristic_DEPRECATED(self, facts: List[Fact]) -> List[Hypothesis]:
-        """Fallback heuristic-based hypothesis generation."""
-        logger.info("📊 Using heuristic approach for hypothesis generation")
+    def _has_explicit_evidence(self, fact: Fact) -> bool:
+        """Detect explicit errors, failures, or configuration mismatches."""
+        content = fact.content.lower()
+        keywords = [
+            "error", "exception", "fail", "failure", "denied", "forbidden", "unauthorized",
+            "timeout", "timed out", "throttle", "throttl", "limit exceeded", "exceeded",
+            "invalid", "mismatch", "misconfig", "not configured", "not found", "missing permission",
+            "accessdenied", "access denied", "unavailable", "service unavailable"
+        ]
+        status_code_match = re.search(r"\b[45]\d{2}\b", content)
+        return bool(status_code_match or any(k in content for k in keywords))
 
-        # Cost tracking removed
-
-        hypotheses = []
-        identified_issues = set()
-
-        for fact in facts:
-            content_lower = fact.content.lower()
-
-            # Permission issues (HIGH PRIORITY)
-            if ("accessdenied" in content_lower or "access denied" in content_lower or
-                "unauthorized" in content_lower or "forbidden" in content_lower or
-                "403" in content_lower) and "permission_issue" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="permission_issue",
-                    description="Access denied error indicates missing IAM permissions or insufficient role permissions",
-                    confidence=0.90,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("permission_issue")
-
-            # Integration failures (502/504 errors)
-            if ("502" in content_lower or "bad gateway" in content_lower or
-                "504" in content_lower or "gateway timeout" in content_lower or
-                "integration failure" in content_lower) and "integration_failure" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="integration_failure",
-                    description="502/504 error indicates backend integration failure or timeout",
-                    confidence=0.85,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("integration_failure")
-
-            # Configuration errors
-            if ("invalid parameter" in content_lower or "validation exception" in content_lower or
-                "configuration error" in content_lower or "misconfigured" in content_lower) and "configuration_error" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="configuration_error",
-                    description="Invalid parameter or validation error indicates configuration mismatch",
-                    confidence=0.88,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("configuration_error")
-
-            # Resource not found errors
-            if ("resource not found" in content_lower or "404" in content_lower or
-                "does not exist" in content_lower or "notfound" in content_lower) and "resource_not_found" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="configuration_error",
-                    description="Resource not found indicates missing or misconfigured resource",
-                    confidence=0.87,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("resource_not_found")
-
-            # Throttling issues
-            if ("throttl" in content_lower or "rate exceeded" in content_lower or
-                "429" in content_lower or "too many requests" in content_lower) and "throttling" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="throttling",
-                    description="Throttling or rate limiting indicates capacity constraints or excessive requests",
-                    confidence=0.90,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("throttling")
-
-            # Timeout issues
-            if "timeout" in content_lower and "timeout" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="timeout",
-                    description="Function execution timeout due to cold start or resource constraints",
-                    confidence=0.8,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("timeout")
-
-            # Error rate issues
-            if ("error rate" in content_lower or "errors" in content_lower) and "error_rate" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="error_rate",
-                    description="Increased error rate indicates potential infrastructure or code issues",
-                    confidence=0.7,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("error_rate")
-
-            # Resource constraint issues
-            if "low memory" in content_lower and "resource_constraint" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="resource_constraint",
-                    description="Low memory allocation might be causing performance issues or timeouts",
-                    confidence=0.85,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("resource_constraint")
-
-            # Code bugs
-            if "division by zero" in content_lower and "division_by_zero" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="Division by zero error in code - likely caused by dividing by length of empty list",
-                    confidence=0.95,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("division_by_zero")
-
-            if "empty list" in content_lower and "not properly handle" in content_lower and "empty_list_handling" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="Function may not properly handle empty input lists, causing runtime errors",
-                    confidence=0.85,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("empty_list_handling")
-
-            if "missing error handling" in content_lower and "error_handling" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="Missing error handling around critical operations may cause unhandled exceptions",
-                    confidence=0.8,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("error_handling")
-
-            # Additional code bug patterns
-            if ("keyerror" in content_lower or "key error" in content_lower) and "key_error" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="KeyError indicates code is accessing dictionary key that doesn't exist",
-                    confidence=0.92,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("key_error")
-
-            if ("attributeerror" in content_lower or "attribute error" in content_lower) and "attribute_error" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="AttributeError indicates code is accessing object attribute or method that doesn't exist",
-                    confidence=0.92,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("attribute_error")
-
-            if ("typeerror" in content_lower or "type error" in content_lower) and "type_error" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="code_bug",
-                    description="TypeError indicates incompatible data types in operation",
-                    confidence=0.90,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("type_error")
-
-            # Network/connectivity issues
-            if ("connection refused" in content_lower or "network error" in content_lower or
-                "unable to connect" in content_lower or "connection timeout" in content_lower) and "network_issue" not in identified_issues:
-                hypotheses.append(Hypothesis(
-                    type="infrastructure_issue",
-                    description="Network connectivity issue indicates VPC configuration, security group, or network routing problem",
-                    confidence=0.82,
-                    evidence=[fact.content]
-                ))
-                identified_issues.add("network_issue")
-
-        logger.info(f"✅ Generated {len(hypotheses)} heuristic hypotheses")
-        return hypotheses
-    
+    def _evidence_is_absence(self, evidence_text: str) -> bool:
+        """Check if evidence references only missing/absent data."""
+        text = evidence_text.lower()
+        absence_markers = [
+            "missing", "absent", "no data", "not captured", "no payload", "no payloads",
+            "empty trace", "not present", "not recorded", "did not capture", "no logs",
+            "no evidence", "no errors observed"
+        ]
+        return any(marker in text for marker in absence_markers)
