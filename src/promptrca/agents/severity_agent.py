@@ -207,37 +207,18 @@ class SeverityAgent:
         sample_facts = [f.content for f in facts[:5]]
         sample_hypotheses = [h.description for h in hypotheses[:3]]
 
-        prompt = f"""You are an expert incident response analyst. Assess the severity of this AWS serverless incident.
-
-CONTEXT:
-- Heuristic severity score: {heuristic_score}/20
-- Affected resources: {context['affected_resources']} (failed: {context['failed_resources']}, degraded: {context['degraded_resources']})
-- Facts discovered: {context['fact_count']}
-- Hypotheses generated: {context['hypothesis_count']}
-
-KEY FACTS:
-{chr(10).join(f"- {fact}" for fact in sample_facts)}
-
-KEY HYPOTHESES:
-{chr(10).join(f"- {hyp}" for hyp in sample_hypotheses)}
-
-Determine:
-1. Severity level: critical, high, medium, or low
-2. Confidence in assessment: 0.0 to 1.0
-3. Detailed reasoning for the assessment
-
-Severity guidelines:
-- critical: Service unavailable, data loss risk, customer-facing outage
-- high: Significant degradation, errors affecting many users
-- medium: Isolated issues, performance degradation
-- low: Minor issues, warnings, or potential future problems
-
-Respond with ONLY a JSON object:
-{{
-    "severity": "high",
-    "confidence": 0.85,
-    "reasoning": "Detailed explanation of why this severity level was chosen..."
-}}"""
+        # Load prompt template and format with context
+        from ..utils.prompt_loader import load_prompt
+        prompt = load_prompt("severity_assessment", variables={
+            "heuristic_score": heuristic_score,
+            "affected_resources": context['affected_resources'],
+            "failed_resources": context['failed_resources'],
+            "degraded_resources": context['degraded_resources'],
+            "fact_count": context['fact_count'],
+            "hypothesis_count": context['hypothesis_count'],
+            "key_facts": "\n".join(f"- {fact}" for fact in sample_facts),
+            "key_hypotheses": "\n".join(f"- {hyp}" for hyp in sample_hypotheses)
+        }, category="graph")
 
         try:
             # Use Strands agent

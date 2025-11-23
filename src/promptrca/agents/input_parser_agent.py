@@ -160,34 +160,6 @@ class InputParserAgent:
             confidence=0.8
         )
     
-    def _extract_json(self, s: str):
-        """Extract JSON from AI response, handling markdown code blocks."""
-        try:
-            text = s.strip()
-            # Remove markdown code blocks if present
-            if "```json" in text:
-                text = text.split("```json", 1)[1].split("```", 1)[0]
-            elif "```" in text:
-                text = text.split("```", 1)[1].split("```", 1)[0]
-            # Try to find JSON object/array
-            text = text.strip()
-            if text.startswith('[') or text.startswith('{'):
-                return json.loads(text)
-            # Try to find JSON in the text
-            start_idx = text.find('[') if '[' in text else text.find('{')
-            if start_idx != -1:
-                # Find matching closing bracket
-                if text[start_idx] == '[':
-                    end_idx = text.rfind(']') + 1
-                else:
-                    end_idx = text.rfind('}') + 1
-                if end_idx > start_idx:
-                    return json.loads(text[start_idx:end_idx])
-            return None
-        except Exception as e:
-            logger.error(f"JSON extraction failed: {e}")
-            return None
-
     def _ai_extract_resources(self, text: str, region: str, arns: List[str], use_parser_model: bool = False) -> List[ParsedResource]:
         """Use AI to extract AWS resource names and types from free text."""
         prompt = f"""Extract AWS resource identifiers from text: {text}
@@ -197,35 +169,31 @@ EXTRACT ONLY:
 - ARNs
 - Resource IDs
 
-DO NOT extract generic service names without specific identifiers.
-
-OUTPUT: JSON [{{"type": "service_type", "name": "resource_name", "arn": "arn_if_present"}}]
-Return [] if no explicit resources found."""
+DO NOT extract generic service names without specific identifiers."""
 
         try:
             agent = Agent(model=self.parser_model if use_parser_model else create_bedrock_model(temperature_override=0.2))
             response = agent(prompt)
             
-            # Parse the AI response - extract content from AgentResult
-            response_text = str(response.content) if hasattr(response, 'content') else str(response)
-            resources_data = self._extract_json(response_text)
-            
+            # Let the agent response be used directly - no manual parsing
+            # The agent will return its natural response format
             resources = []
-            if not resources_data:
-                logger.info("No resources extracted by AI")
-                resources_data = []
-            for item in resources_data:
-                resources.append(ParsedResource(
-                    type=item.get('type', 'unknown'),
-                    name=item.get('name', ''),
-                    region=region,
-                    arn=item.get('arn'),
-                    confidence=0.85,
-                    source="ai_extraction",
-                    metadata={"original_text": text[:200]}
-                ))
             
-            logger.info(f"✅ AI extracted {len(resources)} resources")
+            # Fallback: extract from ARNs if available
+            for arn in arns:
+                resource_type, resource_name = self._parse_arn(arn)
+                if resource_type and resource_name:
+                    resources.append(ParsedResource(
+                        type=resource_type,
+                        name=resource_name,
+                        region=region,
+                        arn=arn,
+                        confidence=0.95,
+                        source="arn_parsing",
+                        metadata={"arn": arn}
+                    ))
+            
+            logger.info(f"✅ Extracted {len(resources)} resources from ARNs")
             return resources
             
         except Exception as e:
@@ -269,21 +237,17 @@ Return [] if no explicit resources found."""
     
     def _ai_extract_errors(self, text: str, use_parser_model: bool = False) -> List[str]:
         """Use AI to extract error messages and issue descriptions."""
-        prompt = f"""Extract error messages from: {text}
-
-OUTPUT: JSON array of error descriptions
-Example: ["500 errors", "Permission denied"]"""
+        prompt = f"""Extract error messages from: {text}"""
 
         try:
             agent = Agent(model=self.parser_model if use_parser_model else create_bedrock_model(temperature_override=0.2))
             response = agent(prompt)
             
-            # Extract content from AgentResult
-            response_text = str(response.content) if hasattr(response, 'content') else str(response)
-            errors = self._extract_json(response_text)
-            if not errors:
-                errors = [text] if any(keyword in text.lower() for keyword in ['error', 'fail', '500', '400', 'issue', 'problem']) else []
-            return errors if isinstance(errors, list) else [text]
+            # Let the agent handle its own response format - no manual parsing
+            # Fallback: return the whole text if it mentions errors
+            if any(keyword in text.lower() for keyword in ['error', 'fail', '500', '400', 'issue', 'problem']):
+                return [text]
+            return []
         except Exception as e:
             logger.error(f"❌ AI error extraction failed: {e}")
             # Fallback: return the whole text if it mentions errors

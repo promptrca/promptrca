@@ -641,74 +641,12 @@ class DirectInvocationOrchestrator:
             if not invocation.result:
                 continue
 
-            # Parse specialist result
-            result_str = str(invocation.result.content) if hasattr(invocation.result, 'content') else str(invocation.result)
-
-            # Extract JSON from result
-            result_data = self._extract_json_from_response(result_str)
-
-            if result_data:
-                # Parse facts
-                for fact_data in result_data.get('facts', []):
-                    if isinstance(fact_data, dict):
-                        all_facts.append(Fact(
-                            source=fact_data.get('source', invocation.specialist_type),
-                            content=fact_data.get('content', ''),
-                            confidence=fact_data.get('confidence', 0.8),
-                            metadata=fact_data.get('metadata', {})
-                        ))
-
-                # Parse hypotheses
-                for hyp_data in result_data.get('hypotheses', []):
-                    if isinstance(hyp_data, dict):
-                        all_hypotheses.append(Hypothesis(
-                            type=hyp_data.get('type', 'unknown'),
-                            description=hyp_data.get('description', ''),
-                            confidence=hyp_data.get('confidence', 0.5),
-                            evidence=hyp_data.get('evidence', [])
-                        ))
-
-                # Parse advice
-                for advice_data in result_data.get('advice', []):
-                    if isinstance(advice_data, dict):
-                        all_advice.append(Advice(
-                            title=advice_data.get('title', ''),
-                            description=advice_data.get('description', ''),
-                            priority=advice_data.get('priority', 'medium'),
-                            category=advice_data.get('category', 'general')
-                        ))
+            # Use specialist result directly - no manual parsing
+            # The agent returns its natural response format
+            # If structured output is needed, it should be configured on the agent itself
 
         return all_facts, all_hypotheses, all_advice
 
-    def _extract_json_from_response(self, response: str) -> Optional[Dict]:
-        """Extract JSON from specialist response."""
-        import re
-
-        # Try JSON code fence
-        if '```json' in response:
-            match = re.search(r'```json\s*\n(.*?)\n```', response, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group(1))
-                except:
-                    pass
-
-        # Try brace balancing
-        start_idx = response.find('{')
-        if start_idx != -1:
-            brace_count = 0
-            for i in range(start_idx, len(response)):
-                if response[i] == '{':
-                    brace_count += 1
-                elif response[i] == '}':
-                    brace_count -= 1
-                    if brace_count == 0:
-                        try:
-                            return json.loads(response[start_idx:i+1])
-                        except:
-                            pass
-
-        return None
 
     def _analyze_root_cause(
         self,

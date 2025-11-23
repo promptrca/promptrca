@@ -22,6 +22,7 @@ Contact: info@promptrca.com
 
 import requests
 import json
+import concurrent.futures
 from typing import Dict, Any, List, Optional
 from ..utils import get_logger
 from ..utils.config import get_aws_knowledge_mcp_config
@@ -45,10 +46,18 @@ except ImportError:
 
 class AWSKnowledgeMCPClient:
     """
-    Client for AWS Knowledge MCP Server.
+    Client for AWS Knowledge MCP Server (public remote server).
+    
+    Uses the publicly available AWS Knowledge MCP server at:
+    https://knowledge-mcp.global.api.aws
+    
+    Documentation: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
     
     Provides access to official AWS documentation, IAM permission requirements,
     integration patterns, and best practices via the AWS Knowledge MCP server.
+    
+    The server uses Streamable HTTP transport and does not require authentication
+    (subject to rate limits).
     """
 
     def __init__(self, url: Optional[str] = None, timeout: Optional[int] = None):
@@ -66,6 +75,8 @@ class AWSKnowledgeMCPClient:
         
         if not self.enabled:
             logger.info("AWS Knowledge MCP is disabled")
+        else:
+            logger.debug(f"AWS Knowledge MCP client initialized with URL: {self.url}")
     
     def search_documentation(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """
@@ -171,11 +182,15 @@ class AWSKnowledgeMCPClient:
             return []
     
     def _search_via_mcp_protocol(self, query: str, max_results: int) -> List[Dict[str, Any]]:
-        """Search using MCP protocol over Streamable HTTP (SSE)."""
+        """
+        Search using MCP protocol over Streamable HTTP.
+        
+        Uses the public AWS Knowledge MCP server at https://knowledge-mcp.global.api.aws
+        Reference: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
+        """
         try:
-            # AWS Knowledge MCP Server uses Streamable HTTP transport
-            # Reference: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
             import asyncio
+            logger.debug(f"Searching AWS Knowledge MCP server at {self.url} for: {query}")
             
             async def _async_search():
                 try:
@@ -187,7 +202,8 @@ class AWSKnowledgeMCPClient:
                             await session.initialize()
                             
                             # Call the search_documentation tool
-                            # According to AWS docs, tool name is "search_documentation"
+                            # According to AWS docs: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
+                            # Tool name is "search_documentation" with parameters: search_phrase, limit
                             result = await session.call_tool(
                                 "search_documentation",
                                 {
@@ -200,30 +216,62 @@ class AWSKnowledgeMCPClient:
                             if result and result.content:
                                 results = []
                                 for content_block in result.content:
-                                    if hasattr(content_block, 'text') and content_block.text:
+                                    if hasattr(content_block, 'text'):
+                                        # Get text - handle both sync and async properties
                                         text = content_block.text
-                                        # The response might be JSON string with search results
+                                        # If text is a coroutine, we need to await it (shouldn't happen, but be safe)
+                                        if asyncio.iscoroutine(text):
+                                            text = await text
+                                        if not text:
+                                            continue
+                                        
+                                        # MCP protocol returns structured data - parse the response
                                         try:
-                                            data = json.loads(text)
-                                            # AWS Knowledge MCP returns results in content.result format
-                                            if isinstance(data, dict) and "content" in data:
-                                                content_data = data["content"]
-                                                if isinstance(content_data, dict) and "result" in content_data:
-                                                    for item in content_data["result"]:
+                                            # Try parsing as JSON first (MCP returns structured data)
+                                            data = json.loads(text) if isinstance(text, str) else text
+                                            
+                                            # AWS Knowledge MCP returns results in a specific format
+                                            # Check for list of results directly
+                                            if isinstance(data, list):
+                                                for item in data:
+                                                    if isinstance(item, dict):
                                                         results.append({
                                                             "text": f"{item.get('title', '')}: {item.get('context', '')}",
                                                             "url": item.get("url", ""),
                                                             "type": "search_result"
                                                         })
-                                            elif isinstance(data, list):
-                                                for item in data:
+                                            # Check for nested result structure
+                                            elif isinstance(data, dict):
+                                                # Check for result array
+                                                if "result" in data:
+                                                    for item in data["result"]:
+                                                        if isinstance(item, dict):
+                                                            results.append({
+                                                                "text": f"{item.get('title', '')}: {item.get('context', '')}",
+                                                                "url": item.get("url", ""),
+                                                                "type": "search_result"
+                                                            })
+                                                # Check for content.result structure
+                                                elif "content" in data:
+                                                    content_data = data["content"]
+                                                    if isinstance(content_data, dict) and "result" in content_data:
+                                                        for item in content_data["result"]:
+                                                            if isinstance(item, dict):
+                                                                results.append({
+                                                                    "text": f"{item.get('title', '')}: {item.get('context', '')}",
+                                                                    "url": item.get("url", ""),
+                                                                    "type": "search_result"
+                                                                })
+                                                # If it's a single result dict with title/context
+                                                elif "title" in data or "context" in data:
                                                     results.append({
-                                                        "text": f"{item.get('title', '')}: {item.get('context', '')}",
-                                                        "url": item.get("url", ""),
+                                                        "text": f"{data.get('title', '')}: {data.get('context', '')}",
+                                                        "url": data.get("url", ""),
                                                         "type": "search_result"
                                                     })
-                                        except (json.JSONDecodeError, AttributeError):
-                                            # If not JSON, use as plain text
+                                        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                                            # If not JSON or parsing fails, use as plain text
+                                            logger.debug(f"Could not parse MCP response as JSON: {e}, using as text")
                                             results.append({
                                                 "text": str(text),
                                                 "type": "search_result"
@@ -232,6 +280,8 @@ class AWSKnowledgeMCPClient:
                                 if results:
                                     logger.info(f"Found {len(results)} AWS documentation results via MCP")
                                     return results[:max_results]
+                                else:
+                                    logger.debug("MCP returned content blocks but no parseable results")
                                     
                 except ImportError:
                     # Fallback to SSE client if streamable HTTP not available
@@ -247,17 +297,33 @@ class AWSKnowledgeMCPClient:
                 return []
             
             # Run async function
+            # Check if we're already in an async context
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're already in an async context, we can't use get_event_loop()
-                    logger.debug("Already in async context, skipping MCP protocol")
-                    return []
-                else:
-                    return loop.run_until_complete(_async_search())
+                asyncio.get_running_loop()
+                # If we're here, we're in an async context - can't use run_until_complete
+                # Run the async function in a separate thread with its own event loop
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Create the coroutine and run it in a new event loop in the thread
+                    future = executor.submit(asyncio.run, _async_search())
+                    return future.result(timeout=self.timeout)
             except RuntimeError:
-                # No event loop, create new one
-                return asyncio.run(_async_search())
+                # No running loop, safe to create/use one
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        # Loop is closed, create a new one
+                        return asyncio.run(_async_search())
+                    else:
+                        return loop.run_until_complete(_async_search())
+                except RuntimeError:
+                    # No event loop exists, create new one
+                    return asyncio.run(_async_search())
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"MCP protocol search timed out after {self.timeout}s")
+                return []
+            except Exception as e:
+                logger.debug(f"Error running async search in thread: {e}")
+                return []
                 
         except Exception as e:
             logger.debug(f"MCP protocol search failed: {e}")
@@ -345,9 +411,15 @@ class AWSKnowledgeMCPClient:
             return ""
     
     def _read_via_mcp_protocol(self, url: str) -> str:
-        """Read documentation using MCP protocol over Streamable HTTP (SSE)."""
+        """
+        Read documentation using MCP protocol over Streamable HTTP.
+        
+        Uses the public AWS Knowledge MCP server at https://knowledge-mcp.global.api.aws
+        Reference: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
+        """
         try:
             import asyncio
+            logger.debug(f"Reading AWS documentation from MCP server at {self.url} for URL: {url}")
             
             async def _async_read():
                 try:
@@ -358,6 +430,8 @@ class AWSKnowledgeMCPClient:
                         async with ClientSession(read, write) as session:
                             await session.initialize()
                             
+                            # Call the read_documentation tool
+                            # According to AWS docs: https://awslabs.github.io/mcp/servers/aws-knowledge-mcp-server
                             result = await session.call_tool(
                                 "read_documentation",
                                 {"url": url}
@@ -365,12 +439,20 @@ class AWSKnowledgeMCPClient:
                             
                             if result and result.content:
                                 # Extract markdown content from content blocks
+                                # MCP protocol returns content blocks with text property
                                 for content_block in result.content:
-                                    if hasattr(content_block, 'text') and content_block.text:
+                                    if hasattr(content_block, 'text'):
+                                        # Get text - handle both sync and async properties
                                         content = content_block.text
+                                        # If content is a coroutine, we need to await it (shouldn't happen, but be safe)
+                                        if asyncio.iscoroutine(content):
+                                            content = await content
                                         if content:
+                                            # Content should be markdown text
                                             logger.info(f"Retrieved AWS documentation via MCP ({len(content)} chars)")
-                                            return content
+                                            return str(content)
+                                
+                                logger.debug("MCP returned content blocks but no text content found")
                 except ImportError:
                     # Fallback to SSE if streamable HTTP not available
                     logger.debug("Streamable HTTP not available for read")
@@ -379,15 +461,33 @@ class AWSKnowledgeMCPClient:
                 
                 return ""
             
+            # Run async function
+            # Check if we're already in an async context
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    logger.debug("Already in async context, skipping MCP protocol")
-                    return ""
-                else:
-                    return loop.run_until_complete(_async_read())
+                asyncio.get_running_loop()
+                # If we're here, we're in an async context - can't use run_until_complete
+                # Run the async function in a separate thread with its own event loop
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, _async_read())
+                    return future.result(timeout=self.timeout)
             except RuntimeError:
-                return asyncio.run(_async_read())
+                # No running loop, safe to create/use one
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        # Loop is closed, create a new one
+                        return asyncio.run(_async_read())
+                    else:
+                        return loop.run_until_complete(_async_read())
+                except RuntimeError:
+                    # No event loop exists, create new one
+                    return asyncio.run(_async_read())
+            except concurrent.futures.TimeoutError:
+                logger.warning(f"MCP protocol read timed out after {self.timeout}s")
+                return ""
+            except Exception as e:
+                logger.debug(f"Error running async read in thread: {e}")
+                return ""
                 
         except Exception as e:
             logger.debug(f"MCP protocol read failed: {e}")
